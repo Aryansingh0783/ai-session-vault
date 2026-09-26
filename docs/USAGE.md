@@ -10,7 +10,7 @@ Run commands from the folder that contains `vault.py`. On Windows use `py vault.
 python3 vault.py
 ```
 
-With no arguments, the tool shows a numbered menu. The launchers (`Run-Windows.bat`, `Run-Mac.command`, `run-linux.sh`) open this menu and pass through any arguments you give them.
+With no arguments, the tool shows a numbered menu. In Git Bash on Windows, start it with `winpty py vault.py` so the hidden passphrase prompt works. The launchers (`Run-Windows.bat`, `Run-Mac.command`, `run-linux.sh`) open this menu and pass through any arguments you give them.
 
 ## `sync`
 
@@ -27,6 +27,8 @@ python3 vault.py backup [--only COMPONENTS] [--map OLD=NEW ...] [--dry-run]
 ```
 
 Copies this device's files into the vault when they are newer than the vault's copy.
+
+- The first backup into an empty vault asks you to create the passphrase. If the vault already has signed files but no `vault_key.json` (a synced folder that hasn't finished syncing), it stops instead of creating a second key.
 
 - Paths inside your home folder in session logs are stored as `~/...`.
 - API keys are encrypted; each file written is signed.
@@ -46,8 +48,10 @@ Copies vault files onto this device when they are newer than the local copy.
 - API keys are decrypted. If a key can't be decrypted on this device, the file containing it is skipped (it's never installed with a placeholder) and applies on a later restore.
 - `~/...` paths in session logs are rewritten for this device, and `--map` rules are applied.
 - New MCP servers are added to `~/.claude.json` and printed with their command. Servers you already have are left alone.
-- Any local file about to be replaced is first saved to `~/.ai-vault-backups/<date-time>/`.
+- Any local file about to be replaced is first saved to `~/.ai-vault-backups/<date-time>/`. Only the newest 10 of these folders are kept.
 - Symlinks inside the vault are ignored.
+- A file that can't be written (open in another app, path too long, disk full) is reported and skipped; the rest of the run continues and the file is retried next time.
+- Restore never creates a vault: with no `vault_key.json` it stops and asks you to run Sync or Backup on your first device.
 
 Close Claude Code, Claude Desktop and Codex before restoring, or they may overwrite restored files.
 

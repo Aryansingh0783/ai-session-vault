@@ -101,6 +101,36 @@ json.dump({"v": 1, "salt": base64.b64encode(salt).decode(), "check": k.check()},
 vault.VAULT = d; os.environ["AI_VAULT_PASSPHRASE"] = "legacy passphrase"; vault.load_keys()
 PYEOF
 
+echo "Robustness"
+"$PY" vault.py context "" --pick 99 </dev/null 2>&1 | grep -q "Pick a number" && ok "context --pick out of range handled" || bad "pick range"
+echo 0 | "$PY" vault.py 2>&1 | grep -q "No option chosen" && ok "menu rejects invalid choice" || bad "menu choice"
+mkdir -p "$SP/fail" && cat > "$SP/fail/sitecustomize.py" <<'PYEOF'
+import os
+_replace = os.replace
+def _flaky(src, dst, *a, **k):
+    if str(dst).endswith("git.md"):
+        raise PermissionError(13, "The process cannot access the file because it is being used by another process")
+    return _replace(src, dst, *a, **k)
+os.replace = _flaky
+PYEOF
+F=$SP/F; mkdir -p "$F/.claude" && echo '{}' > "$F/.claude.json"
+PYTHONPATH="$SP/fail" "$PY" vault.py restore --home "$F" > f.log 2>&1
+grep -q "couldn't be written" f.log && [ -f "$F/.claude/CLAUDE.md" ] && ! grep -q Traceback f.log && ok "a locked file doesn't abort the run" || bad "locked file"
+"$PY" vault.py restore --home "$F" | grep -q "1 file(s) updated" && ok "locked file applies on the next run" || bad "locked file retry"
+mkdir -p "$SP/v2" && cp vault.py "$SP/v2/" && mkdir -p "$SP/v2/data" && cp $V/signatures.json "$SP/v2/data/"
+(cd "$SP/v2" && "$PY" vault.py sync --home "$F" 2>&1 | grep -q "is missing from this vault") && [ ! -f "$SP/v2/data/vault_key.json" ] && ok "half-synced vault is not forked with a new key" || bad "fork guard"
+mkdir -p "$SP/v3" && cp vault.py "$SP/v3/"
+(cd "$SP/v3" && "$PY" vault.py restore --home "$F" 2>&1 | grep -q "no vault here yet") && [ ! -f "$SP/v3/data/vault_key.json" ] && ok "restore doesn't create a vault" || bad "restore create"
+for i in $(seq -w 1 12); do mkdir -p "$F/.ai-vault-backups/20000101-0000$i"; done
+touch -d '2000-01-01' "$F/.claude/CLAUDE.md"; "$PY" vault.py restore --home "$F" >/dev/null
+N=$(ls "$F/.ai-vault-backups" | wc -l); [ "$N" -eq 10 ] && [ ! -d "$F/.ai-vault-backups/20000101-000001" ] && ok "old safety copies pruned to the newest 10" || bad "prune (found $N)"
+"$PY" - <<'PYEOF' && ok "Ctrl+C exits cleanly" || bad "ctrl-c"
+import subprocess, sys, signal, time
+p2 = subprocess.Popen([sys.executable, "vault.py"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+time.sleep(0.5); p2.send_signal(signal.SIGINT); out2 = p2.communicate()[0].decode()
+sys.exit(0 if "Cancelled." in out2 and "Traceback" not in out2 else 1)
+PYEOF
+
 echo "Archive page"
 "$PY" -c "
 import json,zipfile

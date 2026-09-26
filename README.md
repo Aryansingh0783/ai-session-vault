@@ -68,7 +68,7 @@ Everything the tool stores goes into a `data/` folder next to `vault.py`. It is 
 | macOS | Double-click `Run-Mac.command` (first time: right-click → Open) |
 | Linux | `./run-linux.sh` |
 
-Or from a terminal in the folder: `python3 vault.py` (Windows: `py vault.py`).
+Or from a terminal in the folder: `python3 vault.py` (Windows: `py vault.py`; in **Git Bash** use `winpty py vault.py` so the passphrase prompt works).
 
 **2. Choose `1. Sync`.** You'll be asked to create a vault passphrase (12+ characters). Use the same passphrase on every device. It can't be recovered, so store it in your password manager.
 
@@ -91,7 +91,7 @@ AI Session Vault
 - **Leaving a device:** run Sync (or Backup) so the vault has your latest work.
 - **Arriving at a device:** close your AI apps, run Sync. Then `claude --resume` shows your sessions from the other machine.
 - **Newest file wins.** Nothing is ever deleted, on your devices or in the vault.
-- **Safety net:** before restore replaces a file on your device, the old copy is saved to `~/.ai-vault-backups/<date-time>/`.
+- **Safety net:** before restore replaces a file on your device, the old copy is saved to `~/.ai-vault-backups/<date-time>/`. The newest 10 of these folders are kept.
 - **Not sure?** Add `--dry-run` on the command line to see what would change without changing anything.
 
 ## What gets synced
@@ -187,6 +187,10 @@ The vault holds sensitive data and may sit on a cloud drive, so:
 
 | Message / problem | What to do |
 |---|---|
+| `Git Bash can't show a hidden passphrase prompt` | Run `winpty py vault.py`, double-click `Run-Windows.bat`, or set `AI_VAULT_PASSPHRASE`. |
+| `vault_key.json is missing from this vault…` | Your synced folder hasn't finished syncing. Wait for it; don't create a new passphrase. |
+| `There's no vault here yet` | Run Sync or Backup on the device that has your sessions first, and let the folder sync. |
+| `N file(s) couldn't be written (open in another app?)` | Close Claude Code / Claude Desktop / Codex and run Sync again. Everything else was still synced. |
 | `Wrong vault passphrase.` | Use the passphrase you created on the first device. It can't be reset; see [Uninstall / reset](#uninstall--reset) to start a new vault. |
 | `NOT installed: N file(s) … aren't signed` | Files in the vault weren't signed with your passphrase: tampered, or from a version before signing. Run a backup on the device that has the real files. If you don't recognize a file, delete it from the vault folder. |
 | `API keys can't be encrypted/decrypted on this device yet` | `pip install cryptography`, then run Sync again. |
@@ -199,7 +203,7 @@ The vault holds sensitive data and may sit on a cloud drive, so:
 
 ## Uninstall / reset
 
-- **Remove the tool:** delete the folder. Nothing is installed elsewhere, apart from the safety-net copies in `~/.ai-vault-backups/`, which you can delete any time.
+- **Remove the tool:** delete the folder. Nothing is installed elsewhere, apart from the safety-net copies in `~/.ai-vault-backups/` (the newest 10 runs), which you can delete any time.
 - **Start a new vault** (for example, a forgotten passphrase): delete the `data/` folder and run Sync on each device. Your devices keep their own files.
 
 ## Limitations
@@ -208,7 +212,8 @@ The vault holds sensitive data and may sit on a cloud drive, so:
 - claude.ai / ChatGPT chats come from data exports; there is no live sync with those services.
 - Someone with write access to the vault could put back an *older* signed copy of one of your files. It's still your own content, but it could undo a recent change.
 - Context packs are built from the vault without checking signatures. Read a pack before pasting it.
-- Newest-wins works per file: if you edit the same file on two devices before syncing, the later edit wins.
+- Newest-wins works per file: if you edit the same file on two devices before syncing, the later edit wins. This includes continuing the same Claude Code session on two devices without syncing in between.
+- The archive page holds every imported conversation in one HTML file. Very large exports (hundreds of MB) may be slow to open.
 
 ## License
 

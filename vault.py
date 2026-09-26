@@ -257,14 +257,21 @@ class Keys:
             return None
 
 
-def load_keys(dry=False) -> Keys:
+def no_tty_help() -> str:
+    if os.name == "nt" and (os.environ.get("MSYSTEM") or os.environ.get("TERM")):
+        return ("Git Bash can't show a hidden passphrase prompt. Run `winpty py vault.py`, double-click"
+                " Run-Windows.bat, or set AI_VAULT_PASSPHRASE.")
+    return "Set AI_VAULT_PASSPHRASE or run this in a terminal to enter the vault passphrase."
+
+
+def load_keys(dry=False, create=True) -> Keys:
     info = read_json(VAULT / KEYFILE, None)
     pw = os.environ.get("AI_VAULT_PASSPHRASE")
     tty = sys.stdin.isatty()
     if isinstance(info, dict) and info.get("salt"):
         if pw is None:
             if not tty:
-                raise SystemExit("Set AI_VAULT_PASSPHRASE or run interactively to enter the vault passphrase.")
+                raise SystemExit(no_tty_help())
             pw = getpass.getpass("Vault passphrase: ")
         n = info.get("n", 2 ** 15)  # vaults created before N was stored used 2^15
         if n not in KDF_N_ALLOWED:
@@ -273,11 +280,18 @@ def load_keys(dry=False) -> Keys:
         if not hmac.compare_digest(keys.check(), str(info.get("check", ""))):
             raise SystemExit("Wrong vault passphrase.")
         return keys
+    if (VAULT / SIGFILE).exists():  # vault content exists but its key file is missing: don't fork the vault
+        raise SystemExit(f"{KEYFILE} is missing from this vault but other vault files are here. If the folder is"
+                         " still syncing, wait for it to finish. Otherwise restore the file from your other device.")
+    if not create:
+        raise SystemExit("There's no vault here yet. Run Sync or Backup on the device that has your sessions"
+                         " first (and let this folder finish syncing).")
     if pw is None:
         if not tty:
-            raise SystemExit("New vault: set AI_VAULT_PASSPHRASE or run interactively to create a passphrase.")
+            raise SystemExit(no_tty_help())
         log("Create a vault passphrase. It encrypts your API keys and signs your settings so a")
         log("tampered vault can't install anything. Use the same one on every device. It can't be recovered.")
+        log("Already made a vault on another device? Press Ctrl+C and let this folder finish syncing first.")
         while True:
             pw = getpass.getpass(f"New passphrase ({MIN_PASSPHRASE}+ characters): ")
             if len(pw) < MIN_PASSPHRASE:
@@ -367,6 +381,7 @@ class Op:
         self.push = direction == "backup"
         self.copied = self.skipped = self.saved = self.redacted = 0
         self.unsigned: list = []
+        self.failed: list = []
         self.unresolved: set = set()
         self.sigs = read_json(VAULT / SIGFILE, {}) or {}
         self.new_sigs: dict = {}
@@ -492,16 +507,25 @@ class Op:
         if self.dry:
             log(f"    would copy: {dst}")
             return True
-        if dst.exists() and not self.push:
-            b = self._backup_path(dst)
-            b.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(dst, b)
-            self.saved += 1
-        dst.parent.mkdir(parents=True, exist_ok=True)
         tmp = dst.with_name(dst.name + ".vaulttmp")
-        tmp.write_bytes(data)
-        os.replace(tmp, dst)
-        os.utime(dst, (sm, sm))
+        try:
+            if dst.exists() and not self.push:
+                b = self._backup_path(dst)
+                b.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(dst, b)
+                self.saved += 1
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            tmp.write_bytes(data)
+            os.replace(tmp, dst)
+            os.utime(dst, (sm, sm))
+        except OSError as ex:  # e.g. file open in another app (Windows), path too long, disk full
+            self.copied -= 1
+            self.failed.append(f"{dst}: {ex.strerror or ex}")
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            return False
         if self.push:
             self.set_sig(rel, data)
         return True
@@ -651,11 +675,15 @@ def claude_code_pull(op: Op):
                         cmd = " ".join(str(x) for x in [v.get("command") or v.get("url") or "?"] + list(v.get("args") or []))
                         log(f"    + MCP server '{k}': {SECRET_VALUE.sub('***', cmd)[:120]}")
                     if not op.dry:
-                        b = op._backup_path(e.claude_json)
-                        b.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(e.claude_json, b)
-                        data["mcpServers"] = {**cur, **new}
-                        write_json(e.claude_json, data)
+                        try:
+                            b = op._backup_path(e.claude_json)
+                            b.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(e.claude_json, b)
+                            data["mcpServers"] = {**cur, **new}
+                            write_json(e.claude_json, data)
+                        except OSError as ex:
+                            op.failed.append(f"{e.claude_json}: {ex.strerror or ex}")
+                            added = 0
         else:
             log("  Claude Code: run `claude` once on this device, then restore again to add MCP servers")
     log(f"  Claude Code: {n} project(s), {added} MCP server(s) added")
@@ -715,6 +743,21 @@ def touch_manifest(env: Env, action: str):
     write_json(path, m)
 
 
+KEEP_BACKUPS = 10
+
+
+def prune_backups(env: Env):
+    """Keep only the newest safety-copy folders in ~/.ai-vault-backups."""
+    root = env.home / ".ai-vault-backups"
+    try:
+        runs = sorted((d for d in root.iterdir() if d.is_dir() and re.fullmatch(r"\d{8}-\d{6}", d.name)),
+                      key=lambda d: d.name)
+    except OSError:
+        return
+    for d in runs[:-KEEP_BACKUPS]:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def run(direction: str, args, keys: Keys | None = None):
     env = Env(args.home)
     only = [c.strip() for c in (args.only or ",".join(COMPONENTS)).split(",") if c.strip()]
@@ -722,20 +765,28 @@ def run(direction: str, args, keys: Keys | None = None):
     if bad:
         raise SystemExit(f"Unknown component(s): {bad}. Choose from {COMPONENTS}")
     VAULT.mkdir(parents=True, exist_ok=True)
-    keys = keys or load_keys(args.dry_run)
+    keys = keys or load_keys(args.dry_run, create=direction == "backup")
     op = Op(env, direction, keys, dry=args.dry_run, maps=parse_maps(args.map, env.home))
     table = PUSH if op.push else PULL
     arrow = "this device -> vault" if op.push else "vault -> this device"
     log(f"\n{direction.upper()} ({arrow}){'  [dry run]' if op.dry else ''}")
     if not op.push and not op.dry:
         log("  (close Claude Code, Claude Desktop and Codex first so they don't overwrite restored files)")
-    for c in only:
-        table[c](op)
-    op.save_sigs()
+    try:
+        for c in only:
+            table[c](op)
+    finally:
+        op.save_sigs()  # keep signatures for everything already written, even if a step failed
     if not op.dry:
         touch_manifest(env, direction)
+        if not op.push:
+            prune_backups(env)
     log(f"  -> {op.copied} file(s) updated, {op.skipped} already up to date"
         + (f", {op.saved} replaced file(s) saved to ~/.ai-vault-backups/{STAMP}" if op.saved else ""))
+    if op.failed:
+        log(f"  ! {len(op.failed)} file(s) couldn't be written (open in another app? close it and run again):")
+        for r in op.failed[:8]:
+            log(f"      {r}")
     if op.unsigned:
         log(f"  ! NOT installed: {len(op.unsigned)} file(s) in the vault aren't signed with your passphrase."
             " Someone else may have written them, or they predate signing. A backup from the device that has"
@@ -1067,6 +1118,9 @@ def cmd_context(args):
             pick = int(input("Pick number: ").strip())
         except (ValueError, EOFError):
             return
+    if not 1 <= (pick or 1) <= len(cands):
+        log(f"Pick a number from 1 to {min(len(cands), 25)}.")
+        return
     c = cands[(pick or 1) - 1]
     pack = build_pack(c, args.max_chars)
     out = VAULT / "context-packs" / f"{dt.date.today()}-{slugify(c['title'], 50)}.md"
@@ -1113,8 +1167,11 @@ def menu(parser):
         log(f"  {i}. {label}")
     try:
         choice = int(input("Choose: ").strip())
+        if not 1 <= choice <= len(items):
+            raise ValueError
         argv = items[choice - 1][1]
-    except (ValueError, IndexError, EOFError):
+    except (ValueError, EOFError):
+        log("No option chosen.")
         return
     if argv == ["context"]:
         argv = ["context", input("Search (title / project / session id, blank = all): ").strip()]
@@ -1213,4 +1270,8 @@ document.getElementById('q').oninput=render;document.getElementById('src').oncha
 </script></body></html>"""
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nCancelled.")
+        sys.exit(130)
