@@ -16,6 +16,7 @@ API keys are encrypted and every file is signed with your passphrase, so a vault
 
 ## Contents
 
+- [How it works](#how-it-works)
 - [Requirements](#requirements)
 - [Install](#install)
 - [Quick start](#quick-start)
@@ -35,6 +36,95 @@ API keys are encrypted and every file is signed with your passphrase, so a vault
 More detail: [docs/USAGE.md](docs/USAGE.md) (every command and option, and [building the EXE](docs/USAGE.md#building-the-windows-exe)) and [docs/SECURITY.md](docs/SECURITY.md) (how encryption and signing work).
 
 ---
+
+## How it works
+
+### The big picture
+
+Each computer keeps its own Claude Code / Codex / Claude Desktop files where those apps expect them. The vault is a folder (on a USB drive or in a synced cloud folder) that sits between your computers. **Sync** copies the newest version of each file into the vault, and from the vault onto the computer you're using.
+
+```mermaid
+flowchart LR
+    subgraph PC["Main PC"]
+        PCF["Claude Code, Codex,<br/>Claude Desktop files"]
+    end
+    subgraph V["Vault folder: USB drive or synced cloud folder"]
+        VF["data/<br/>sessions, settings, memory<br/>API keys encrypted<br/>every file signed"]
+    end
+    subgraph L["Laptop"]
+        LF["Claude Code, Codex,<br/>Claude Desktop files"]
+    end
+    PCF -- "Sync: backup" --> VF
+    VF -- "Sync: restore" --> PCF
+    LF -- "Sync: backup" --> VF
+    VF -- "Sync: restore" --> LF
+```
+
+### A round trip, step by step
+
+```mermaid
+sequenceDiagram
+    participant PC as Main PC
+    participant V as Vault folder
+    participant L as Laptop
+    PC->>V: Run Sync: your latest sessions, settings and memory go into the vault
+    Note over V: Cloud folder uploads it, or you carry the USB drive
+    V->>L: Run Sync on the laptop: newer files are checked and copied in
+    Note over L: claude --resume, carry on working
+    L->>V: Run Sync when done: the laptop's new work goes into the vault
+    Note over V: Cloud folder uploads it, or you carry the USB drive back
+    V->>PC: Run Sync on the main PC: the laptop's work arrives
+```
+
+1. **Main PC → vault.** Sync backs up everything that changed since the last time.
+2. **The vault travels.** A synced folder uploads it by itself; with a USB drive, you carry it.
+3. **Vault → laptop.** Sync on the laptop copies in whatever is newer than what the laptop has.
+4. **Work on the laptop.** `claude --resume` lists the sessions from your main PC.
+5. **Laptop → vault.** Sync again when you're done.
+6. **Vault → main PC.** Sync on the main PC brings the laptop's work back.
+
+Your code isn't part of this: move it with git (`git push` / `git pull`). The full checklist is in [Walkthrough: main PC and laptop](#walkthrough-main-pc-and-laptop).
+
+### What happens inside one Sync
+
+```mermaid
+flowchart TD
+    A["Run Sync"] --> B["Enter passphrase"]
+    B --> C{"Passphrase correct?"}
+    C -- "No" --> X["Stop. Nothing is changed"]
+    C -- "Yes" --> D["BACKUP: go through each file on this computer"]
+    D --> E{"Newer than the vault's copy?"}
+    E -- "No" --> G
+    E -- "Yes" --> F["Rewrite folder paths to a portable form<br/>Encrypt API keys<br/>Save into the vault and sign it"]
+    F --> G["RESTORE: go through each file in the vault"]
+    G --> H{"Newer than this computer's copy?"}
+    H -- "No" --> Z
+    H -- "Yes" --> I{"Signature valid?"}
+    I -- "No" --> R["Skip it and list it as NOT installed"]
+    I -- "Yes" --> J["Decrypt API keys<br/>Rewrite paths for this computer<br/>Save the old local copy to .ai-vault-backups<br/>Install the new file"]
+    J --> Z["Show a summary"]
+    R --> Z
+```
+
+**Backup** (this computer → vault), for every file that is newer here than in the vault:
+
+1. Folder paths inside session logs are made portable: `C:\Users\Aryan\code\app` becomes `~/code/app`.
+2. API keys and tokens in config files are encrypted with your passphrase.
+3. The file is written into `data/` and signed, so any later change by someone else is detected.
+
+**Restore** (vault → this computer), for every file that is newer in the vault than here:
+
+1. The signature is checked. A file that isn't signed with your passphrase is never installed.
+2. API keys are decrypted, and paths are rewritten for this computer (`~/code/app` becomes `/Users/aryan/code/app` on a Mac).
+3. The file it replaces is saved to `~/.ai-vault-backups/` first, then the new file is installed.
+4. New MCP servers are added and printed on screen, so you can see what will run.
+
+**Rules that always hold:**
+
+- **Newest wins.** Files are compared by when they were last changed. The newer copy is kept; nothing is merged.
+- **Nothing is deleted** from your computers or from the vault.
+- **Your passphrase never leaves your head.** It isn't saved anywhere unless you set it up for the [automatic backup](#optional-automatic-daily-backup-windows).
+- **Logins are never copied.** You sign in to each app on each computer.
 
 ## Requirements
 
