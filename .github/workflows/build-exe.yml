@@ -23,13 +23,41 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: python -m pip install --upgrade pip pyinstaller cryptography
+        run: python -m pip install --upgrade pip pyinstaller cryptography pefile
 
       - name: Build EXE
         run: >
           pyinstaller --onefile --console --name ai-session-vault
+          --icon assets/icon.ico
           --hidden-import cryptography.hazmat.primitives.ciphers.aead
           --noconfirm vault.py
+
+      - name: Check the EXE carries our icon
+        shell: bash
+        run: |
+          python - <<'EOF'
+          import struct, pefile
+          # every image stored in assets/icon.ico
+          ico = open("assets/icon.ico", "rb").read()
+          count = struct.unpack_from("<HHH", ico, 0)[2]
+          ours = set()
+          for i in range(count):
+              size, offset = struct.unpack_from("<II", ico, 6 + 16 * i + 8)
+              ours.add(ico[offset:offset + size])
+          # every icon image embedded in the EXE (RT_ICON = 3)
+          pe = pefile.PE("dist/ai-session-vault.exe")
+          embedded = set()
+          for rtype in pe.DIRECTORY_ENTRY_RESOURCE.entries:
+              if rtype.id != 3:
+                  continue
+              for res in rtype.directory.entries:
+                  for lang in res.directory.entries:
+                      d = lang.data.struct
+                      embedded.add(pe.get_data(d.OffsetToData, d.Size))
+          found = len(ours & embedded)
+          print(f"{found} of {len(ours)} icon images found in the EXE")
+          assert found == len(ours), "EXE does not carry assets/icon.ico"
+          EOF
 
       - name: Smoke test the EXE
         shell: pwsh

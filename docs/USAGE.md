@@ -156,7 +156,7 @@ To build it yourself on Windows:
 
 ```
 py -m pip install pyinstaller cryptography
-py -m PyInstaller --onefile --console --name ai-session-vault --hidden-import cryptography.hazmat.primitives.ciphers.aead vault.py
+py -m PyInstaller --onefile --console --name ai-session-vault --icon assets/icon.ico --hidden-import cryptography.hazmat.primitives.ciphers.aead vault.py
 ```
 
 The EXE is written to `dist\ai-session-vault.exe`. When run, it keeps its vault in a `data` folder next to itself, exactly like `vault.py`.
