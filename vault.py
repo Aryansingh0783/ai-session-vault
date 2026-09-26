@@ -26,7 +26,9 @@ import sys
 import zipfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+# A packaged EXE unpacks itself into a temporary folder, so there the vault lives next to the EXE instead.
+FROZEN = getattr(sys, "frozen", False)
+ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent
 VAULT = ROOT / "data"
 TOL = 2.0  # seconds of mtime slack (FAT/exFAT/cloud drives round timestamps)
 STAMP = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -1269,9 +1271,30 @@ d.onclick=()=>{cur=c;show(c);render()};L.appendChild(d)})}
 document.getElementById('q').oninput=render;document.getElementById('src').onchange=render;render();
 </script></body></html>"""
 
+def hold_window():
+    """A double-clicked EXE closes its window on exit: keep it open so the message can be read."""
+    if FROZEN and len(sys.argv) == 1 and sys.stdin.isatty():
+        try:
+            input("\nPress Enter to close.")
+        except (EOFError, KeyboardInterrupt):
+            pass
+
+
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
         print("\nCancelled.")
         sys.exit(130)
+    except SystemExit as ex:
+        if ex.code not in (0, None):
+            if isinstance(ex.code, str):
+                print(ex.code)
+            hold_window()
+            sys.exit(1)
+        raise
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        hold_window()
+        sys.exit(1)

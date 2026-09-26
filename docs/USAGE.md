@@ -2,7 +2,7 @@
 
 Everything `vault.py` can do. For a walkthrough, start with the [README](../README.md).
 
-Run commands from the folder that contains `vault.py`. On Windows use `py vault.py` (or `python vault.py`) in place of `python3 vault.py`.
+Run commands from the folder that contains `vault.py`. On Windows use `py vault.py` (or `python vault.py`) in place of `python3 vault.py`. With the EXE, use `ai-session-vault.exe` in its place, e.g. `ai-session-vault.exe sync --dry-run`.
 
 ## Interactive menu
 
@@ -139,3 +139,24 @@ Example (macOS/Linux, cron, every evening at 19:05):
 ```
 
 Scheduled runs should usually be `backup`. Run `restore` yourself, with your AI apps closed.
+
+## Building the Windows EXE
+
+The EXE is built automatically by GitHub Actions (`.github/workflows/build-exe.yml`) on a Windows machine, smoke-tested, and attached to the release:
+
+- **New release:** push a version tag, e.g.
+  ```
+  git tag -a v1.1.0 -m "v1.1.0"
+  git push origin v1.1.0
+  ```
+  A few minutes later, `ai-session-vault.exe` appears on that release (the release is created if it doesn't exist).
+- **Any time:** on GitHub, open **Actions → Build Windows EXE → Run workflow**. When it finishes, download the EXE from the run page under **Artifacts**.
+
+To build it yourself on Windows:
+
+```
+py -m pip install pyinstaller cryptography
+py -m PyInstaller --onefile --console --name ai-session-vault --hidden-import cryptography.hazmat.primitives.ciphers.aead vault.py
+```
+
+The EXE is written to `dist\ai-session-vault.exe`. When run, it keeps its vault in a `data` folder next to itself, exactly like `vault.py`.

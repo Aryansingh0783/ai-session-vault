@@ -8,7 +8,7 @@ Carry your AI work between computers. Put this folder on a USB drive or in a syn
 - **claude.ai and ChatGPT**: import your data exports into one searchable offline archive
 - **Context packs**: turn any chat or session into a paste-ready prompt to continue it anywhere
 
-One Python file, standard library only, no install step. Works on Windows, macOS and Linux.
+One Python file, standard library only, no install step. Works on Windows, macOS and Linux. On Windows you can also use the standalone **`ai-session-vault.exe`**, which needs no Python at all.
 
 API keys are encrypted and every file is signed with your passphrase, so a vault on a shared or cloud drive can't be used to plant anything on your devices. See [Security](#security).
 
@@ -30,11 +30,13 @@ API keys are encrypted and every file is signed with your passphrase, so a vault
 - [Uninstall / reset](#uninstall--reset)
 - [Limitations](#limitations)
 
-More detail: [docs/USAGE.md](docs/USAGE.md) (every command and option) and [docs/SECURITY.md](docs/SECURITY.md) (how encryption and signing work).
+More detail: [docs/USAGE.md](docs/USAGE.md) (including [building the EXE](docs/USAGE.md#building-the-windows-exe)) (every command and option) and [docs/SECURITY.md](docs/SECURITY.md) (how encryption and signing work).
 
 ---
 
 ## Requirements
+
+**Using the Windows EXE?** Nothing to install: it includes Python and the encryption package. Skip to [Install](#install).
 
 - **Python 3.8 or newer.** Tested on 3.10–3.13.
   - Windows: install from [python.org](https://www.python.org/downloads/) (tick "Add python.exe to PATH").
@@ -48,7 +50,9 @@ More detail: [docs/USAGE.md](docs/USAGE.md) (every command and option) and [docs
 
 ## Install
 
-Download this repository into the place you want the vault to live:
+**Windows, no Python needed:** download `ai-session-vault.exe` from the [latest release](https://github.com/Aryansingh0783/ai-session-vault/releases/latest) and put it in the folder where you want the vault to live (a USB drive or a synced folder). Double-click it. The vault is created in a `data` folder next to the EXE.
+
+**Any OS, with Python:** download this repository into the place you want the vault to live:
 
 - **USB drive or synced folder:** click **Code → Download ZIP**, unzip it there, or
 - **git:**
@@ -64,7 +68,7 @@ Everything the tool stores goes into a `data/` folder next to `vault.py`. It is 
 
 | OS | How to run |
 |---|---|
-| Windows | Double-click `Run-Windows.bat` |
+| Windows | Double-click `ai-session-vault.exe`, or `Run-Windows.bat` if you use the Python version |
 | macOS | Double-click `Run-Mac.command` (first time: right-click → Open) |
 | Linux | `./run-linux.sh` |
 
@@ -187,6 +191,8 @@ The vault holds sensitive data and may sit on a cloud drive, so:
 
 | Message / problem | What to do |
 |---|---|
+| Windows: "Windows protected your PC" when opening the EXE | The EXE isn't code-signed, so SmartScreen warns on first run. Click **More info → Run anyway**. You can check it was built from this repo's code in the **Actions** tab. |
+| Antivirus flags or quarantines the EXE | Some antivirus tools flag PyInstaller-built EXEs by mistake. Restore it and add an exception, or use the Python version (`Run-Windows.bat`). |
 | `Git Bash can't show a hidden passphrase prompt` | Run `winpty py vault.py`, double-click `Run-Windows.bat`, or set `AI_VAULT_PASSPHRASE`. |
 | `vault_key.json is missing from this vault…` | Your synced folder hasn't finished syncing. Wait for it; don't create a new passphrase. |
 | `There's no vault here yet` | Run Sync or Backup on the device that has your sessions first, and let the folder sync. |
@@ -203,7 +209,7 @@ The vault holds sensitive data and may sit on a cloud drive, so:
 
 ## Uninstall / reset
 
-- **Remove the tool:** delete the folder. Nothing is installed elsewhere, apart from the safety-net copies in `~/.ai-vault-backups/` (the newest 10 runs), which you can delete any time.
+- **Remove the tool:** delete the folder (or the EXE and its `data` folder). Nothing is installed elsewhere, apart from the safety-net copies in `~/.ai-vault-backups/` (the newest 10 runs), which you can delete any time.
 - **Start a new vault** (for example, a forgotten passphrase): delete the `data/` folder and run Sync on each device. Your devices keep their own files.
 
 ## Limitations

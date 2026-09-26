@@ -1,0 +1,66 @@
+name: Build Windows EXE
+
+# Builds ai-session-vault.exe on a Windows runner.
+# - Push a tag like v1.1.0: the EXE is built, tested and attached to that release (created if missing).
+# - Run manually (Actions tab -> Build Windows EXE -> Run workflow): the EXE is available as a download
+#   on the run's page under "Artifacts".
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # needed to create the release and upload the EXE
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: python -m pip install --upgrade pip pyinstaller cryptography
+
+      - name: Build EXE
+        run: >
+          pyinstaller --onefile --console --name ai-session-vault
+          --hidden-import cryptography.hazmat.primitives.ciphers.aead
+          --noconfirm vault.py
+
+      - name: Smoke test the EXE
+        shell: pwsh
+        env:
+          AI_VAULT_PASSPHRASE: "ci smoke test passphrase"
+        run: |
+          $dir = "$env:RUNNER_TEMP\usb"; $home2 = "$env:RUNNER_TEMP\home"
+          New-Item -ItemType Directory -Force "$dir", "$home2\.claude\commands" | Out-Null
+          Copy-Item dist\ai-session-vault.exe $dir
+          '{"mcpServers":{"gh":{"command":"npx","env":{"TOKEN":"smoke-secret-123"}}}}' | Set-Content "$home2\.claude.json"
+          'hello' | Set-Content "$home2\.claude\commands\a.md"
+          & "$dir\ai-session-vault.exe" backup --home $home2
+          if ($LASTEXITCODE -ne 0) { throw "backup failed" }
+          if (-not (Test-Path "$dir\data\vault_key.json")) { throw "vault not created next to the EXE" }
+          if (Select-String -Path "$dir\data\claude-code\mcp_servers.json" -Pattern "smoke-secret-123" -Quiet) { throw "secret stored in plain text" }
+          if (-not (Select-String -Path "$dir\data\claude-code\mcp_servers.json" -Pattern "vault-enc" -Quiet)) { throw "secret not encrypted" }
+          & "$dir\ai-session-vault.exe" status
+          if ($LASTEXITCODE -ne 0) { throw "status failed" }
+          Write-Host "Smoke test passed"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-session-vault-exe
+          path: dist/ai-session-vault.exe
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
+          gh release upload "$TAG" dist/ai-session-vault.exe --clobber
