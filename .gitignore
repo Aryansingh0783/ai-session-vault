@@ -1,0 +1,9 @@
+# Your vault: chat history, sessions, encrypted keys. Never commit it.
+data/
+__pycache__/
+*.pyc
+*.vaulttmp
+.findings/
+.DS_Store
+Thumbs.db
+desktop.ini
