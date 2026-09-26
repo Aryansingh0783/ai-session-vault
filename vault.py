@@ -261,8 +261,10 @@ class Keys:
 
 def no_tty_help() -> str:
     if os.name == "nt" and (os.environ.get("MSYSTEM") or os.environ.get("TERM")):
-        return ("Git Bash can't show a hidden passphrase prompt. Run `winpty py vault.py`, double-click"
-                " Run-Windows.bat, or set AI_VAULT_PASSPHRASE.")
+        run, click = ("winpty ./ai-session-vault.exe", "ai-session-vault.exe") if FROZEN \
+            else ("winpty py vault.py", "Run-Windows.bat")
+        return (f"Git Bash can't show a hidden passphrase prompt. Run `{run}`, double-click {click},"
+                " or set AI_VAULT_PASSPHRASE.")
     return "Set AI_VAULT_PASSPHRASE or run this in a terminal to enter the vault passphrase."
 
 

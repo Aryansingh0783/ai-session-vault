@@ -19,6 +19,7 @@ API keys are encrypted and every file is signed with your passphrase, so a vault
 - [Requirements](#requirements)
 - [Install](#install)
 - [Quick start](#quick-start)
+- [Windows: using the EXE](#windows-using-the-exe)
 - [Everyday use](#everyday-use)
 - [What gets synced](#what-gets-synced)
 - [Importing claude.ai and ChatGPT chats](#importing-claudeai-and-chatgpt-chats)
@@ -30,7 +31,7 @@ API keys are encrypted and every file is signed with your passphrase, so a vault
 - [Uninstall / reset](#uninstall--reset)
 - [Limitations](#limitations)
 
-More detail: [docs/USAGE.md](docs/USAGE.md) (including [building the EXE](docs/USAGE.md#building-the-windows-exe)) (every command and option) and [docs/SECURITY.md](docs/SECURITY.md) (how encryption and signing work).
+More detail: [docs/USAGE.md](docs/USAGE.md) (every command and option, and [building the EXE](docs/USAGE.md#building-the-windows-exe)) and [docs/SECURITY.md](docs/SECURITY.md) (how encryption and signing work).
 
 ---
 
@@ -50,7 +51,7 @@ More detail: [docs/USAGE.md](docs/USAGE.md) (including [building the EXE](docs/U
 
 ## Install
 
-**Windows, no Python needed:** download `ai-session-vault.exe` from the [latest release](https://github.com/Aryansingh0783/ai-session-vault/releases/latest) and put it in the folder where you want the vault to live (a USB drive or a synced folder). Double-click it. The vault is created in a `data` folder next to the EXE.
+**Windows, no Python needed:** use `ai-session-vault.exe`. Step-by-step: [Windows: using the EXE](#windows-using-the-exe).
 
 **Any OS, with Python:** download this repository into the place you want the vault to live:
 
@@ -68,7 +69,7 @@ Everything the tool stores goes into a `data/` folder next to `vault.py`. It is 
 
 | OS | How to run |
 |---|---|
-| Windows | Double-click `ai-session-vault.exe`, or `Run-Windows.bat` if you use the Python version |
+| Windows | Double-click `ai-session-vault.exe` ([details](#windows-using-the-exe)), or `Run-Windows.bat` if you use the Python version |
 | macOS | Double-click `Run-Mac.command` (first time: right-click → Open) |
 | Linux | `./run-linux.sh` |
 
@@ -89,6 +90,71 @@ AI Session Vault
   5. Make a context pack (continue a chat anywhere)
   6. Status
 ```
+
+## Windows: using the EXE
+
+`ai-session-vault.exe` is the whole tool in one file. It includes Python and the encryption package, so there's nothing to install.
+
+### 1. Download it
+
+1. Open the [latest release](https://github.com/Aryansingh0783/ai-session-vault/releases/latest) and, under **Assets**, download `ai-session-vault.exe`.
+2. Create a folder where the vault will live and move the EXE into it. **The vault is always created next to the EXE**, so pick this folder deliberately:
+   - on a USB drive, e.g. `E:\AI Vault`
+   - or in a synced folder, e.g. `C:\Users\<you>\OneDrive\AI Vault` or your Google Drive folder
+3. Optional, stops the "Windows protected your PC" warning: right-click the EXE → **Properties** → at the bottom, tick **Unblock** → **OK**. (Only shown for downloaded files.)
+
+### 2. First run (your first PC)
+
+1. Close Claude Code, Claude Desktop and Codex.
+2. Double-click `ai-session-vault.exe`. If Windows shows "Windows protected your PC", click **More info → Run anyway**.
+3. A black window opens with the menu. Type `1` and press **Enter** (Sync).
+4. Create your vault passphrase (12+ characters) and type it again to confirm. **Nothing appears while you type; that's normal.** Save it in your password manager: it can't be recovered.
+5. When it finishes, press **Enter** to close the window. A `data` folder now sits next to the EXE. That's your vault.
+
+### 3. Your other PCs
+
+1. Plug in the USB drive, or wait until your synced folder has finished syncing (including the `data` folder).
+2. Close Claude Code, Claude Desktop and Codex.
+3. Double-click the **same** `ai-session-vault.exe` in that folder, choose `1`, and enter the **same** passphrase.
+
+From then on, run **Sync** (`1`) whenever you leave a PC and when you arrive at the next one.
+
+Using a Mac or Linux machine too? Put `vault.py` (and `Run-Mac.command` / `run-linux.sh`) from this repo in the same folder. They use the same `data` folder as the EXE.
+
+### Command line (optional)
+
+Open the vault folder in File Explorer, click the address bar, type `powershell` and press Enter. Then:
+
+```powershell
+.\ai-session-vault.exe sync                # backup, then restore
+.\ai-session-vault.exe sync --dry-run      # show what would change, change nothing
+.\ai-session-vault.exe status
+.\ai-session-vault.exe import              # everything in data\inbox
+.\ai-session-vault.exe context "landing page"
+.\ai-session-vault.exe restore --map "D:\work=~/work"
+```
+
+In Command Prompt, drop the `.\` (`ai-session-vault.exe sync`). In **Git Bash**, use `winpty ./ai-session-vault.exe sync`, otherwise the passphrase prompt can't work.
+
+To skip the passphrase prompt for one PowerShell window: `$env:AI_VAULT_PASSPHRASE = "your passphrase"`.
+
+### Importing claude.ai / ChatGPT exports
+
+Choose `4` once. This creates `data\inbox` next to the EXE. Put your export `.zip` files there, choose `4` again, then open `data\archive\archive.html` in your browser. See [Importing claude.ai and ChatGPT chats](#importing-claudeai-and-chatgpt-chats) for how to get the exports.
+
+### Updating to a new version
+
+Close the EXE, download the new `ai-session-vault.exe` from the [latest release](https://github.com/Aryansingh0783/ai-session-vault/releases/latest), and replace the old file in the vault folder. Keep the `data` folder. If the folder is synced, your other PCs get the new EXE too.
+
+### Where things are on Windows
+
+| What | Where |
+|---|---|
+| Your vault | the `data` folder next to `ai-session-vault.exe` |
+| Claude Code | `C:\Users\<you>\.claude\` and `C:\Users\<you>\.claude.json` |
+| Codex CLI | `C:\Users\<you>\.codex\` |
+| Claude Desktop config | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Safety copies made by restore | `C:\Users\<you>\.ai-vault-backups\` (newest 10 kept) |
 
 ## Everyday use
 
@@ -191,15 +257,17 @@ The vault holds sensitive data and may sit on a cloud drive, so:
 
 | Message / problem | What to do |
 |---|---|
-| Windows: "Windows protected your PC" when opening the EXE | The EXE isn't code-signed, so SmartScreen warns on first run. Click **More info → Run anyway**. You can check it was built from this repo's code in the **Actions** tab. |
+| Windows: "Windows protected your PC" when opening the EXE | The EXE isn't code-signed, so SmartScreen warns on first run. Click **More info → Run anyway**, or unblock it first (Properties → **Unblock**). You can check it was built from this repo's code in the **Actions** tab. |
+| The EXE window opens and closes immediately | Run it from PowerShell (`.\ai-session-vault.exe status`) to see the message, and check the vault folder isn't read-only. |
+| The vault went somewhere unexpected | The vault is always the `data` folder next to the EXE you ran. Move the EXE and its `data` folder together. |
 | Antivirus flags or quarantines the EXE | Some antivirus tools flag PyInstaller-built EXEs by mistake. Restore it and add an exception, or use the Python version (`Run-Windows.bat`). |
-| `Git Bash can't show a hidden passphrase prompt` | Run `winpty py vault.py`, double-click `Run-Windows.bat`, or set `AI_VAULT_PASSPHRASE`. |
+| `Git Bash can't show a hidden passphrase prompt` | Run `winpty ./ai-session-vault.exe` (EXE) or `winpty py vault.py` (Python), double-click the EXE / `Run-Windows.bat`, or set `AI_VAULT_PASSPHRASE`. |
 | `vault_key.json is missing from this vault…` | Your synced folder hasn't finished syncing. Wait for it; don't create a new passphrase. |
 | `There's no vault here yet` | Run Sync or Backup on the device that has your sessions first, and let the folder sync. |
 | `N file(s) couldn't be written (open in another app?)` | Close Claude Code / Claude Desktop / Codex and run Sync again. Everything else was still synced. |
 | `Wrong vault passphrase.` | Use the passphrase you created on the first device. It can't be reset; see [Uninstall / reset](#uninstall--reset) to start a new vault. |
 | `NOT installed: N file(s) … aren't signed` | Files in the vault weren't signed with your passphrase: tampered, or from a version before signing. Run a backup on the device that has the real files. If you don't recognize a file, delete it from the vault folder. |
-| `API keys can't be encrypted/decrypted on this device yet` | `pip install cryptography`, then run Sync again. |
+| `API keys can't be encrypted/decrypted on this device yet` | Python version only (the EXE includes it): `pip install cryptography`, then run Sync again. |
 | `Not applied yet: N secret(s) couldn't be decrypted` | Same as above. The affected config is skipped (never installed with placeholders) and applies on the next restore. |
 | Sessions don't show in `claude --resume` | Make sure the project folder exists at the path restore printed, or use `--map`. Restart Claude Code. |
 | Restored changes get overwritten | Close Claude Code, Claude Desktop and Codex before restoring. |
