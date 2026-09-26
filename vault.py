@@ -10,6 +10,7 @@ Python 3.8+, standard library only. Works on Windows, macOS and Linux.
 from __future__ import annotations
 
 import argparse
+import filecmp
 import base64
 import datetime as dt
 import getpass
@@ -34,7 +35,10 @@ TOL = 2.0  # seconds of mtime slack (FAT/exFAT/cloud drives round timestamps)
 STAMP = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
 EXCLUDE = {".credentials.json", "auth.json", ".DS_Store", "Thumbs.db", "desktop.ini", "_vault_meta.json"}
 CLAUDE_ITEMS = ["CLAUDE.md", "settings.json", "rules", "commands", "agents", "skills", "output-styles"]
-CODEX_ITEMS = ["config.toml", "AGENTS.md", "prompts", "sessions", "archived_sessions"]
+CODEX_ITEMS = ["config.toml", "AGENTS.md", "prompts", "sessions", "archived_sessions",
+               # Codex desktop app: its history index, sidebar state, memory and skills
+               "session_index.jsonl", "state_*.sqlite", "thread_history_*.sqlite", "memories_*.sqlite",
+               "memories", "skills", ".codex-global-state.json"]
 COMPONENTS = ("claude-code", "claude-desktop", "codex")
 
 try:
@@ -199,7 +203,7 @@ def transform_jsonl(data: bytes, fn) -> bytes:
 # ------------------------------------------------------------ vault security
 KEYFILE, SIGFILE = "vault_key.json", "signatures.json"
 ENC, RED = "vault-enc:v1:", "vault-redacted"
-SECRET_JSON, SECRET_TOML = {"settings.json", "claude_desktop_config.json"}, {"config.toml"}
+SECRET_JSON, SECRET_TOML = {"settings.json", "claude_desktop_config.json", ".codex-global-state.json"}, {"config.toml"}
 SECRET_BAGS = {"env", "headers", "http_headers", "env_http_headers"}
 SECRET_NAME = re.compile(r"(key|token|secret|passw|auth|credential|bearer|cookie)", re.I)
 SECRET_VALUE = re.compile(r"(sk-[A-Za-z0-9_\-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|xox[abprs]-[A-Za-z0-9\-]{10,}"
@@ -207,6 +211,14 @@ SECRET_VALUE = re.compile(r"(sk-[A-Za-z0-9_\-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|g
 TOML_KEY = r"""(?:"[^"]*"|'[^']*'|[A-Za-z0-9_\-]+)"""
 # key = "basic string" | 'literal string'  (bare, quoted or dotted keys). Values are kept raw, so round trips are exact.
 TOML_PAIR = re.compile(rf"""((?<![\w"'])({TOML_KEY}(?:\s*\.\s*{TOML_KEY})*)\s*=\s*)("((?:[^"\\]|\\.)*)"|'([^']*)')""")
+
+
+BIG, CHUNK = 32 * 1024 ** 2, 4 * 1024 ** 2  # files above BIG are copied and signed in CHUNK-sized pieces
+
+
+def plain(name: str) -> bool:
+    """Files stored in the vault byte-for-byte (no path rewriting or secret encryption)."""
+    return not name.endswith(".jsonl") and name not in SECRET_JSON and name not in SECRET_TOML
 
 
 KDF_N_NEW, KDF_N_ALLOWED = 2 ** 17, (2 ** 15, 2 ** 16, 2 ** 17, 2 ** 18)  # scrypt cost (OWASP: N=2^17, r=8, p=1)
@@ -240,6 +252,10 @@ class Keys:
 
     def sign(self, rel: str, data: bytes) -> str:
         return hmac.new(self.mac_key, rel.encode() + b"\0" + data, hashlib.sha256).hexdigest()
+
+    def signer(self, rel: str):
+        """Incremental version of sign() for large files: update() with the contents, then hexdigest()."""
+        return hmac.new(self.mac_key, rel.encode() + b"\0", hashlib.sha256)
 
     def seal(self, value: str, prev=None) -> str:
         if not self.aead:  # can't encrypt here: never store plaintext; keep another device's ciphertext
@@ -386,11 +402,19 @@ class Op:
         self.copied = self.skipped = self.saved = self.redacted = 0
         self.unsigned: list = []
         self.failed: list = []
+        self.busy: list = []
         self.unresolved: set = set()
         self.sigs = read_json(VAULT / SIGFILE, {}) or {}
         self.new_sigs: dict = {}
 
     # --- signatures
+    def sig_ok_file(self, rel: str, path: Path) -> bool:
+        h = self.keys.signer(rel)
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(CHUNK), b""):
+                h.update(chunk)
+        return hmac.compare_digest(str(self.sigs.get(rel, "")), h.hexdigest())
+
     def sig_ok(self, rel: str, data: bytes) -> bool:
         return hmac.compare_digest(str(self.sigs.get(rel, "")), self.keys.sign(rel, data))
 
@@ -444,6 +468,11 @@ class Op:
 
     def matches_local(self, local: Path, vfile: Path) -> bool:
         """Does the vault copy hold exactly this device's content? Used to sign files from before signing existed."""
+        if plain(local.name):  # stored byte-for-byte: compare in chunks (works for very large files)
+            try:
+                return filecmp.cmp(local, vfile, shallow=False)
+            except OSError:
+                return False
         push, unresolved = self.push, set(self.unresolved)
         self.push = False
         try:
@@ -475,10 +504,27 @@ class Op:
             return True
         if rel.endswith(".jsonl") and abs(vfile.stat().st_mtime - local_mtime) <= TOL:
             return False
+        if vfile.stat().st_size > BIG:
+            return not self.sig_ok_file(rel, vfile)
         return not self.sig_ok(rel, vfile.read_bytes())
+
+    def db_busy(self, src: Path, dst: Path) -> bool:
+        """An SQLite database with a non-empty -wal file is open or not cleanly closed: copying it, or
+        replacing it, could corrupt it. Skip it and ask the user to close the app."""
+        for p in (src, dst):
+            wal = p.with_name(p.name + "-wal")
+            try:
+                if wal.exists() and wal.stat().st_size > 0:
+                    return True
+            except OSError:
+                return True
+        return False
 
     def copy(self, src: Path, dst: Path, jsonl_fn=None) -> bool:
         """Newest-wins copy. Everything restored must carry a valid signature made with your passphrase."""
+        if src.suffix == ".sqlite" and self.db_busy(src, dst):
+            self.busy.append(src.name)
+            return False
         try:
             if not self.push and os.path.islink(src):  # restore: never follow links planted in the vault
                 return False
@@ -498,6 +544,8 @@ class Op:
             if fresh:
                 self.skipped += 1
                 return False
+        if plain(src.name) and src.stat().st_size > BIG:
+            return self.copy_stream(src, dst, rel, sm)
         raw = src.read_bytes() if self.push else read_nofollow(src)
         if raw is None:
             return False
@@ -534,14 +582,55 @@ class Op:
             self.set_sig(rel, data)
         return True
 
+    def copy_stream(self, src: Path, dst: Path, rel: str, sm: float) -> bool:
+        """copy() for large files that are stored as-is: copied and signed/verified in chunks, so memory use
+        stays small. Restore verifies the signature of exactly the bytes it wrote before installing them."""
+        self.copied += 1
+        if self.dry:
+            log(f"    would copy: {dst}")
+            return True
+        tmp = dst.with_name(dst.name + ".vaulttmp")
+        h = self.keys.signer(rel)
+        try:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(src, os.O_RDONLY | getattr(os, "O_BINARY", 0) | (0 if self.push else getattr(os, "O_NOFOLLOW", 0)))
+            with os.fdopen(fd, "rb") as fi, open(tmp, "wb") as fo:
+                for chunk in iter(lambda: fi.read(CHUNK), b""):
+                    h.update(chunk)
+                    fo.write(chunk)
+            if not self.push and not hmac.compare_digest(str(self.sigs.get(rel, "")), h.hexdigest()):
+                tmp.unlink()
+                self.copied -= 1
+                self.unsigned.append(rel)
+                return False
+            if dst.exists() and not self.push:
+                b = self._backup_path(dst)
+                b.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(dst, b)
+                self.saved += 1
+            os.replace(tmp, dst)
+            os.utime(dst, (sm, sm))
+        except OSError as ex:
+            self.copied -= 1
+            self.failed.append(f"{dst}: {ex.strerror or ex}")
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            return False
+        if self.push:
+            self.sigs[rel] = self.new_sigs[rel] = h.hexdigest()
+        return True
+
     def items(self, src_base: Path, dst_base: Path, names, jsonl_fn=None):
         for name in names:
-            s = src_base / name
-            if s.is_file():
-                self.copy(s, dst_base / name, jsonl_fn)
-            elif s.is_dir():
-                for f in walk(s):
-                    self.copy(f, dst_base / f.relative_to(src_base), jsonl_fn)
+            matches = sorted(src_base.glob(name)) if any(c in name for c in "*?[") else [src_base / name]
+            for s in matches:
+                if s.is_file():
+                    self.copy(s, dst_base / s.relative_to(src_base), jsonl_fn)
+                elif s.is_dir():
+                    for f in walk(s):
+                        self.copy(f, dst_base / f.relative_to(src_base), jsonl_fn)
 
 
 # --------------------------------------------------------------- Claude Code
@@ -748,10 +837,23 @@ def touch_manifest(env: Env, action: str):
 
 
 KEEP_BACKUPS = 10
+MAX_BACKUP_BYTES = 3 * 1024 ** 3
+
+
+def _dir_size(d: Path) -> int:
+    total = 0
+    for dp, _, fns in os.walk(d):
+        for f in fns:
+            try:
+                total += os.path.getsize(os.path.join(dp, f))
+            except OSError:
+                pass
+    return total
 
 
 def prune_backups(env: Env):
-    """Keep only the newest safety-copy folders in ~/.ai-vault-backups."""
+    """Keep the newest safety-copy folders in ~/.ai-vault-backups: at most 10 runs and about 3 GB in total
+    (the newest run is always kept)."""
     root = env.home / ".ai-vault-backups"
     try:
         runs = sorted((d for d in root.iterdir() if d.is_dir() and re.fullmatch(r"\d{8}-\d{6}", d.name)),
@@ -760,6 +862,12 @@ def prune_backups(env: Env):
         return
     for d in runs[:-KEEP_BACKUPS]:
         shutil.rmtree(d, ignore_errors=True)
+    runs = runs[-KEEP_BACKUPS:]
+    total = 0
+    for i, d in enumerate(reversed(runs)):  # newest first
+        total += _dir_size(d)
+        if i > 0 and total > MAX_BACKUP_BYTES:
+            shutil.rmtree(d, ignore_errors=True)
 
 
 def run(direction: str, args, keys: Keys | None = None):
@@ -787,6 +895,9 @@ def run(direction: str, args, keys: Keys | None = None):
             prune_backups(env)
     log(f"  -> {op.copied} file(s) updated, {op.skipped} already up to date"
         + (f", {op.saved} replaced file(s) saved to ~/.ai-vault-backups/{STAMP}" if op.saved else ""))
+    if op.busy:
+        log(f"  ! Codex app history not synced ({', '.join(sorted(set(op.busy)))} in use). Quit the Codex app"
+            " completely (also from the system tray, near the clock) and run Sync again.")
     if op.failed:
         log(f"  ! {len(op.failed)} file(s) couldn't be written (open in another app? close it and run again):")
         for r in op.failed[:8]:

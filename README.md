@@ -41,7 +41,8 @@ The **vault** is just a folder. **Sync** is the button that copies your newest w
 - **One** of these, to hold the vault:
   - **Best:** OneDrive, Google Drive or Dropbox installed on both computers. The vault then moves between them by itself, even in an emergency.
   - **Or:** a USB stick that you carry with you.
-- Claude Code (and/or Claude Desktop, Codex) installed on both computers, and **signed in** on both.
+- Claude Code (and/or Claude Desktop, the Codex app) installed on both computers, and **signed in** on both.
+- The **same Windows user name** on both computers is best (e.g. both `C:\Users\Aryan`). The Codex app's history list works best that way; everything else works either way.
 - About 10 minutes.
 
 ---
@@ -61,7 +62,7 @@ Move `ai-session-vault.exe` from your **Downloads** folder into this new **`AI V
 > The program always keeps your vault next to itself, so it must live in this folder, not in Downloads.
 
 **Step 3. Close your AI apps.**
-Close Claude Code (close its terminal window), Claude Desktop and Codex, if they're open.
+Close Claude Code (close its terminal window), Claude Desktop and the Codex app, if they're open. For Claude Desktop and Codex, also check the small icons near the clock: right-click → **Quit**.
 
 **Step 4. Open the program.**
 Double-click **`ai-session-vault.exe`**.
@@ -103,7 +104,7 @@ Some lines will scroll past. When you see **`Done. Press Enter to close.`**, pre
 - **OneDrive / Google Drive:** wait until the `AI Vault` folder appears on the laptop and has finished syncing (its sync icon shows it's up to date).
 - **USB stick:** plug it in.
 
-**Step 2. Close your AI apps** on the laptop (Claude Code, Claude Desktop, Codex).
+**Step 2. Close your AI apps** on the laptop (Claude Code, Claude Desktop, the Codex app; check the icons near the clock too).
 
 **Step 3.** Open the **`AI Vault`** folder and double-click **`ai-session-vault.exe`** (the same one, not a new download).
 
@@ -157,6 +158,8 @@ Make this a habit at the end of every day. Then, if you suddenly have to use the
 | **"Wrong vault passphrase."** | Type the passphrase you created in Part 1. Check Caps Lock. |
 | **"…is missing from this vault…"** or **"There's no vault here yet"** | OneDrive / Google Drive hasn't finished copying the vault to this computer. Wait a few minutes and try again. Don't create a new passphrase. |
 | **"…couldn't be written (open in another app? close it and run again)"** | An AI app was still open. Close Claude Code, Claude Desktop and Codex, then run Sync again. |
+| **"Codex app history not synced (… in use)"** | The Codex app is still running. Right-click its icon near the clock → **Quit**, then run Sync again. Your Codex chats are safe; only its history list waited. |
+| **Codex app on the laptop doesn't list my chats** | Quit and reopen the Codex app. If they still don't show, check both computers use the same Windows user name (the app's history list stores full folder paths). Your chats themselves are in the vault either way. |
 | **"NOT installed: … aren't signed"** | Some files in the vault weren't made by you (or were made by an older version). Run Sync on your other computer, then run it here again. |
 | **The window closes straight away** | Make sure the program is inside your `AI Vault` folder (not inside a zip file or Downloads), then try again. |
 | **I can't see my conversations** | Open Claude Code **in the same project folder** you used on the other computer, then use `/resume`. |

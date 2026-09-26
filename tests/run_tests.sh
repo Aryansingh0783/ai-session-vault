@@ -37,7 +37,7 @@ echo "Round trip and encryption"
 grep -rqE "SECRET|desk-secret|toml-.*secret|sk-ant" $V && bad "no plaintext secrets in vault" || ok "no plaintext secrets in vault"
 "$PY" -c "import json,sys;d=json.load(open('$V/vault_key.json'));sys.exit(0 if d['n']==2**17 else 1)" && ok "new vault uses scrypt N=2^17" || bad "kdf N"
 cp -r $V "$SP/_v1"; "$PY" vault.py backup --home "$A" >/dev/null
-[ -z "$(diff -r "$SP/_v1" $V | grep -v manifest)" ] && ok "second backup rewrites nothing" || bad "churn"
+[ -z "$(diff -r -x manifest.json "$SP/_v1" $V)" ] && ok "second backup rewrites nothing" || bad "churn"
 "$PY" vault.py restore --home "$B" > r.log
 grep -q sk-ant-SECRET "$B/.claude/settings.json" && grep -q "${GHP}SECRETSECRET" "$B/.claude.json" && grep -q desk-secret-99 "$B/.config/Claude/claude_desktop_config.json" && ok "secrets decrypted on device B" || bad "decrypt"
 diff -q "$A/.codex/config.toml" "$B/.codex/config.toml" >/dev/null && ok "config.toml byte-identical" || bad "toml"
@@ -129,6 +129,60 @@ import subprocess, sys, signal, time
 p2 = subprocess.Popen([sys.executable, "vault.py"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 time.sleep(0.5); p2.send_signal(signal.SIGINT); out2 = p2.communicate()[0].decode()
 sys.exit(0 if "Cancelled." in out2 and "Traceback" not in out2 else 1)
+PYEOF
+
+echo "Codex desktop app"
+"$PY" - "$A/.codex" <<'PYEOF'
+import sqlite3, os, sys, json
+cx = sys.argv[1]
+def db(name, rows, blob=0):
+    c = sqlite3.connect(os.path.join(cx, name)); c.execute("create table t(id integer primary key, v text, b blob)")
+    for i in range(rows): c.execute("insert into t(v,b) values(?,?)", (f"thread {i}", os.urandom(blob) if blob else None))
+    c.commit(); c.close()
+db("state_5.sqlite", 50)
+db("thread_history_1.sqlite", 40, blob=1024 * 1024)   # ~40 MB: exercises the chunked copy path
+db("logs_2.sqlite", 5); db("queue_1.sqlite", 5)
+open(os.path.join(cx, "session_index.jsonl"), "w").write('{"id":"t1","title":"ad copy"}\n')
+open(os.path.join(cx, ".codex-global-state.json"), "w").write(json.dumps({"projects": ["F:/Work"], "apiKey": "sk-codexappSECRET1234567890"}))
+os.makedirs(os.path.join(cx, "memories")); open(os.path.join(cx, "memories", "m.md"), "w").write("likes short hooks")
+os.makedirs(os.path.join(cx, "skills", "s1")); open(os.path.join(cx, "skills", "s1", "SKILL.md"), "w").write("skill")
+open(os.path.join(cx, "auth.json"), "w").write('{"token":"login"}')
+PYEOF
+"$PY" vault.py backup --home "$A" --only codex >/dev/null
+[ -f $V/codex/state_5.sqlite ] && [ -f $V/codex/thread_history_1.sqlite ] && [ -f $V/codex/session_index.jsonl ] && [ -f $V/codex/memories/m.md ] && [ -f $V/codex/skills/s1/SKILL.md ] && [ -f $V/codex/.codex-global-state.json ] && ok "Codex app history, memory, skills, sidebar backed up" || bad "codex app backup"
+[ ! -e $V/codex/logs_2.sqlite ] && [ ! -e $V/codex/queue_1.sqlite ] && [ ! -e $V/codex/auth.json ] && ok "Codex logs, queue and login not copied" || bad "codex exclusions"
+grep -q "sk-codexappSECRET" $V/codex/.codex-global-state.json && bad "Codex app state secret encrypted" || ok "Codex app state secret encrypted"
+"$PY" vault.py restore --home "$B" --only codex >/dev/null
+cmp -s "$A/.codex/thread_history_1.sqlite" "$B/.codex/thread_history_1.sqlite" && cmp -s "$A/.codex/state_5.sqlite" "$B/.codex/state_5.sqlite" && ok "Codex databases identical on device B" || bad "codex db copy"
+"$PY" -c "import sqlite3,sys; c=sqlite3.connect('$B/.codex/thread_history_1.sqlite'); sys.exit(0 if c.execute('pragma integrity_check').fetchone()[0]=='ok' and c.execute('select count(*) from t').fetchone()[0]==40 else 1)" && ok "restored Codex database opens and passes integrity check" || bad "codex db integrity"
+grep -q "sk-codexappSECRET" "$B/.codex/.codex-global-state.json" && [ -f "$B/.codex/memories/m.md" ] && ok "Codex app state and memory restored" || bad "codex state restore"
+cp -r $V "$SP/_v2"; "$PY" vault.py backup --home "$A" --only codex >/dev/null
+D=$(diff -r -x manifest.json "$SP/_v2" $V); [ -z "$D" ] && ok "unchanged Codex databases aren't re-copied" || { bad "codex churn"; echo "$D" | head -5; }
+"$PY" -c "import sqlite3; c=sqlite3.connect('$A/.codex/state_5.sqlite'); c.execute(\"insert into t(v) values('new on A')\"); c.commit()"
+printf 'wal-data' > "$B/.codex/state_5.sqlite-wal"
+"$PY" vault.py backup --home "$A" --only codex >/dev/null; "$PY" vault.py restore --home "$B" --only codex > cx.log
+grep -q "Codex app history not synced" cx.log && ! "$PY" -c "import sqlite3,sys; sys.exit(0 if sqlite3.connect('file:$B/.codex/state_5.sqlite?mode=ro&immutable=1', uri=True).execute(\"select count(*) from t where v='new on A'\").fetchone()[0] else 1)" && ok "open Codex database (Codex running) is never overwritten" || bad "codex busy guard"
+rm -f "$B/.codex/state_5.sqlite-wal"; "$PY" vault.py restore --home "$B" --only codex >/dev/null
+cmp -s "$A/.codex/state_5.sqlite" "$B/.codex/state_5.sqlite" && ok "applies once the Codex app is closed" || bad "codex after close"
+printf 'wal' > "$A/.codex/thread_history_1.sqlite-wal"; touch "$A/.codex/thread_history_1.sqlite"
+"$PY" vault.py backup --home "$A" --only codex | grep -q "thread_history_1.sqlite in use" && ok "open database on the source is not backed up" || bad "codex busy source"
+rm -f "$A/.codex/thread_history_1.sqlite-wal"
+"$PY" - <<'PYEOF'
+import os, time
+p = "data/codex/thread_history_1.sqlite"; f = open(p, "r+b"); f.seek(5_000_000); f.write(b"TAMPERED"); f.close()
+t = time.time() + 7200; os.utime(p, (t, t))
+PYEOF
+"$PY" vault.py restore --home "$B" --only codex | grep -q "thread_history_1.sqlite" && ! grep -q TAMPERED "$B/.codex/thread_history_1.sqlite" && ok "tampered large file refused" || bad "big tamper"
+"$PY" - "$SP" <<'PYEOF' && ok "safety copies capped by total size, newest kept" || bad "size cap"
+import os, sys, pathlib
+sys.path.insert(0, "."); import vault
+home = pathlib.Path(sys.argv[1]) / "cap"; root = home / ".ai-vault-backups"
+for i in range(1, 6):
+    d = root / f"2000010{i}-000000"; d.mkdir(parents=True); (d / "f").write_bytes(b"x" * 600)
+vault.MAX_BACKUP_BYTES = 1500
+vault.prune_backups(vault.Env(str(home)))
+left = sorted(x.name for x in root.iterdir())
+sys.exit(0 if left == ["20000104-000000", "20000105-000000"] else 1)
 PYEOF
 
 echo "Archive page"

@@ -245,7 +245,7 @@ Close the EXE, download the new `ai-session-vault.exe` from the [latest release]
 |---|---|
 | Your vault | the `data` folder next to `ai-session-vault.exe` |
 | Claude Code | `C:\Users\<you>\.claude\` and `C:\Users\<you>\.claude.json` |
-| Codex CLI | `C:\Users\<you>\.codex\` |
+| Codex (CLI and desktop app) | `C:\Users\<you>\.codex\` |
 | Claude Desktop config | `%APPDATA%\Claude\claude_desktop_config.json` |
 | Safety copies made by restore | `C:\Users\<you>\.ai-vault-backups\` (newest 10 kept) |
 
@@ -326,10 +326,17 @@ Then **sign out of Windows and back in** so the scheduled task can see the passp
 | | Auto-memory (`MEMORY.md` and topic files) | `~/.claude/projects/<project>/memory/` |
 | | CLAUDE.md, rules, settings, commands, agents, skills, output styles | `~/.claude/` |
 | | User-scope MCP servers | `mcpServers` in `~/.claude.json` (new servers are added; yours are never overwritten) |
-| Codex CLI | Sessions, archived sessions, config.toml, AGENTS.md, prompts | `~/.codex/` |
+| Codex (CLI and desktop app) | Sessions, archived sessions, config.toml, AGENTS.md, prompts; for the desktop app also its history index (`session_index.jsonl`, `state_*.sqlite`, `thread_history_*.sqlite`), memory (`memories/`, `memories_*.sqlite`), skills and sidebar state (`.codex-global-state.json`) | `~/.codex/` |
 | Claude Desktop | `claude_desktop_config.json` (MCP servers, preferences) | Windows `%APPDATA%\Claude\`, macOS `~/Library/Application Support/Claude/`, Linux `~/.config/Claude/` |
 
 `CLAUDE_CONFIG_DIR` and `CODEX_HOME` are respected if you've set them.
+
+**Codex desktop app notes:**
+- Its databases are copied whole and only while closed: a database with an open write-ahead log (`-wal` file) on either computer is skipped, and Sync asks you to quit the Codex app. Nothing is ever copied half-written.
+- Newest wins for the whole database, so work in the Codex app on one computer at a time and sync in between, as with everything else.
+- The databases store full folder paths, which the vault can't rewrite. The app's history list works best when both computers have the same Windows user name, and your work folders are at the same place (e.g. the same drive letter).
+- Codex's logs, job queue, caches and login (`auth.json`) are never copied.
+- Large files (over 32 MB, such as `thread_history_1.sqlite`) are copied and signed in chunks, so memory use stays low.
 
 **Never synced:** login tokens (`.credentials.json`, Codex `auth.json`) and account state in `~/.claude.json`. Sign in once on each device.
 
