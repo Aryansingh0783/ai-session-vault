@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/hero.png" alt="AI Session Vault: carry your Claude and ChatGPT session history and context between devices" width="100%">
+</p>
+
 # AI Session Vault
 
 **Take your Claude and ChatGPT work with you from one computer to another.**
