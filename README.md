@@ -20,6 +20,7 @@ API keys are encrypted and every file is signed with your passphrase, so a vault
 - [Install](#install)
 - [Quick start](#quick-start)
 - [Windows: using the EXE](#windows-using-the-exe)
+- [Walkthrough: main PC and laptop](#walkthrough-main-pc-and-laptop)
 - [Everyday use](#everyday-use)
 - [What gets synced](#what-gets-synced)
 - [Importing claude.ai and ChatGPT chats](#importing-claudeai-and-chatgpt-chats)
@@ -155,6 +156,67 @@ Close the EXE, download the new `ai-session-vault.exe` from the [latest release]
 | Codex CLI | `C:\Users\<you>\.codex\` |
 | Claude Desktop config | `%APPDATA%\Claude\claude_desktop_config.json` |
 | Safety copies made by restore | `C:\Users\<you>\.ai-vault-backups\` (newest 10 kept) |
+
+## Walkthrough: main PC and laptop
+
+The full round trip, for when your main PC is where you work and you sometimes have to switch to a laptop, planned or in an emergency. The steps are the same for any two devices. "Run Sync" means: double-click the EXE (or launcher) and choose `1`.
+
+**Key idea:** the vault only knows what was synced into it. In an emergency you may not be able to reach your main PC, so keep the vault current *before* you need it (step 1).
+
+### Once: set up both devices
+
+1. **Put the vault folder in a synced folder** (OneDrive, Google Drive, Dropbox). A USB drive also works, but only if the drive is with you when the emergency happens.
+2. **Main PC:** follow [Quick start](#quick-start) (or [Windows: using the EXE](#windows-using-the-exe)). Run Sync and create your passphrase.
+3. **Laptop:** install the same apps you use (Claude Code, Claude Desktop, Codex) and **sign in to each one**. Login tokens are never copied, on purpose. Make sure the synced folder is on the laptop too.
+4. **Code:** the vault carries your AI sessions and settings, *not* your project folders. Keep projects in git (GitHub), and clone them on the laptop at the same place under your user folder, e.g. `C:\Users\<you>\code\my-app`. A different location works too; see [different places](#when-project-folders-live-in-different-places).
+5. **Recommended:** turn on the [automatic daily backup](#optional-automatic-daily-backup-windows) on the main PC, so an emergency never catches the vault out of date.
+
+### Every day on the main PC
+
+At the end of the day (or before you step away), close Claude Code, Claude Desktop and Codex, **run Sync**, and `git push` your code. The automatic backup covers you on days you forget.
+
+### Switching to the laptop
+
+1. Wait until the synced folder is up to date on the laptop (OneDrive/Google Drive icon shows it's synced), including the `data` folder.
+2. `git pull` your projects.
+3. Close Claude Code, Claude Desktop and Codex. **Run Sync** and enter your passphrase.
+4. Open a terminal in your project and run `claude --resume`. Your sessions from the main PC are listed; pick one and carry on. Codex: `codex resume`. Your CLAUDE.md, rules, commands, memory and MCP servers are already in place.
+
+### When you're done on the laptop
+
+1. Close Claude Code, Claude Desktop and Codex.
+2. **Run Sync.** This puts the laptop's work into the vault.
+3. `git push` your code.
+4. Keep the laptop online until the synced folder has finished uploading.
+
+### Back on the main PC
+
+1. Wait for the synced folder to finish downloading, then `git pull`.
+2. Close Claude Code, Claude Desktop and Codex. **Run Sync.**
+3. `claude --resume` now includes what you did on the laptop.
+
+### Good to know
+
+- **Don't continue the same session on both devices without syncing in between.** Each session is one file and the newest copy wins. If it happens anyway, the replaced copy is in `C:\Users\<you>\.ai-vault-backups\`.
+- **Chats on claude.ai, chatgpt.com and the Claude/ChatGPT apps** already follow your account to any device. Nothing to do for them.
+- **Unsure what a sync will change?** Run `ai-session-vault.exe sync --dry-run` (or `python3 vault.py sync --dry-run`) first.
+- **Messages after a sync** tell you what needs attention; see [Troubleshooting](#troubleshooting).
+
+### Optional: automatic daily backup (Windows)
+
+This backs up the main PC into the vault every day at 7 pm, even if you forget. Open **Command Prompt** (Start → type `cmd`; not PowerShell, which handles the quotes differently) and run the following, with your own passphrase and the path to your EXE:
+
+```bat
+setx AI_VAULT_PASSPHRASE "your vault passphrase"
+schtasks /Create /TN "AI Session Vault backup" /SC DAILY /ST 19:00 /TR "\"E:\AI Vault\ai-session-vault.exe\" backup"
+```
+
+Then **sign out of Windows and back in** so the scheduled task can see the passphrase. It runs only while you're signed in; a window appears briefly while it runs. It only *backs up*: restoring is always something you do yourself, with your apps closed. With the passphrase saved, the EXE also stops asking for it on this PC.
+
+- Test it: open **Task Scheduler**, find "AI Session Vault backup", right-click → **Run**, then check `status` shows a new backup time.
+- Remove it: `schtasks /Delete /TN "AI Session Vault backup" /F` and `reg delete HKCU\Environment /v AI_VAULT_PASSPHRASE /f`, then sign out and back in.
+- `setx` stores the passphrase in your Windows user profile. Only do this on a PC that only you use.
+- Python version: use `/TR "py \"E:\AI Vault\vault.py\" backup"` instead.
 
 ## Everyday use
 

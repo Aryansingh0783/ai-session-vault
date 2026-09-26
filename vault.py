@@ -270,7 +270,7 @@ def no_tty_help() -> str:
 
 def load_keys(dry=False, create=True) -> Keys:
     info = read_json(VAULT / KEYFILE, None)
-    pw = os.environ.get("AI_VAULT_PASSPHRASE")
+    pw = os.environ.get("AI_VAULT_PASSPHRASE") or None  # empty (e.g. cleared with setx "") = not set
     tty = sys.stdin.isatty()
     if isinstance(info, dict) and info.get("salt"):
         if pw is None:
