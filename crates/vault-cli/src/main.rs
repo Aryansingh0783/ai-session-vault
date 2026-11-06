@@ -2,6 +2,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use clap::{Parser, Subcommand};
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
+mod autostart;
 use vault_core::archive;
 use vault_core::crypto::{KdfParams, MIN_PASSPHRASE};
 use vault_core::doctor::{self, Level};
@@ -130,6 +131,17 @@ enum Cmd {
         /// Poll only (no file watching).
         #[arg(long)]
         no_watch: bool,
+        /// Append events (JSON lines) to this file instead of printing; for unattended runs.
+        #[arg(long)]
+        log: Option<PathBuf>,
+    },
+    /// Start the engine automatically at login (Windows scheduled task / macOS launchd / Linux systemd user unit).
+    Autostart {
+        /// enable | disable | status
+        action: String,
+        /// Show what would be installed without changing anything.
+        #[arg(long)]
+        print: bool,
     },
 }
 
@@ -471,7 +483,27 @@ fn run() -> Result<()> {
             println!("Imported {} file(s) from {} project(s). Run `avault sync` to distribute them.", r.files, r.projects);
             println!("Not imported (v1 encrypted fields inside them): {}. Sync those fresh from the device that has them.", r.skipped.join(", "));
         }
-        Cmd::Daemon { args, quiet, full_every, no_watch } => {
+        Cmd::Autostart { action, print } => {
+            use autostart::Action;
+            let act = match action.as_str() {
+                "enable" => Action::Enable,
+                "disable" => Action::Disable,
+                "status" => Action::Status,
+                _ => bail!("use: avault autostart enable | disable | status"),
+            };
+            let dir = vault_dir(&cli, &env)?;
+            let vid = Store::read_header(&dir)?.vault_id;
+            if act == Action::Enable {
+                let unattended = keyring_entry(&vid).and_then(|e| e.get_password().ok()).is_some() || load_device_credential(&env, &vid).is_some();
+                if !unattended && !*print {
+                    bail!("the engine can't ask for a passphrase at login. Run `avault remember` (or `avault join` on a new device) first.");
+                }
+            }
+            std::fs::create_dir_all(&env.state_dir)?;
+            let log = env.state_dir.join("daemon.log");
+            println!("{}", autostart::apply(act, &dir, &log, *print)?);
+        }
+        Cmd::Daemon { args, quiet, full_every, no_watch, log: log_file } => {
             use vault_core::engine::{Engine, EngineConfig, Event};
             let store = open(&cli, &env)?;
             let o = options(args)?;
@@ -489,7 +521,20 @@ fn run() -> Result<()> {
                 println!("Engine running (Ctrl+C to stop). Syncs {}s after a session goes quiet.", quiet);
             }
             let mut last_progress = 0usize;
+            let mut logger = log_file.as_ref().map(|p| {
+                // Keep the unattended log from growing without bound.
+                if std::fs::metadata(p).map_or(false, |m| m.len() > 5 * 1024 * 1024) {
+                    let _ = std::fs::remove_file(p);
+                }
+                std::fs::OpenOptions::new().create(true).append(true).open(p)
+            });
             while let Ok(ev) = engine.events.recv() {
+                if let Some(Ok(f)) = logger.as_mut() {
+                    if !matches!(ev, Event::Progress { .. }) {
+                        let _ = writeln!(f, "{}", serde_json::to_string(&ev)?);
+                    }
+                    continue;
+                }
                 if cli.json {
                     println!("{}", serde_json::to_string(&ev)?);
                     continue;
