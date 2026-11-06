@@ -110,10 +110,29 @@
       btn.innerHTML = syncing ? `${loader("circle")}<span>Syncing</span>` : `${ico("refresh", "ids-icon--xs")}<span>Sync now</span>`;
     }
     const user = (S.settings && S.settings.user) || "";
-    $("#greeting").textContent = user ? `Hi, ${user}!` : "Hi!";
+    const ov0 = S.overview;
+    const heads = {
+      projects: ["Projects", ov0 ? `${num(ov0.totals.projects)} tracked across ${ov0.totals.devices} device${ov0.totals.devices === 1 ? "" : "s"}` : ""],
+      devices: ["Devices", "Computers that share this vault"],
+      archive: ["Archive", "Search every session and imported chat on this device"],
+      health: ["Health", "Checks, integrity and cleanup"],
+      settings: ["Settings", "What gets synced, and what never leaves a device"],
+    };
+    const head = heads[route()];
+    $("#greeting").textContent = head ? head[0] : user ? `Hi, ${user}!` : "Hi!";
     $("#avatar").textContent = (user || (me && me.name) || "V").charAt(0).toUpperCase();
     const ov = S.overview;
-    $("#subline").textContent = ov ? `${ov.totals.devices} device${ov.totals.devices === 1 ? "" : "s"} · ${num(ov.totals.sessions)} sessions · last sync ${st.status && st.status.last_sync ? ago(st.status.last_sync) : "none yet"}` : "";
+    $("#subline").textContent = head ? head[1] : ov ? `${ov.totals.devices} device${ov.totals.devices === 1 ? "" : "s"} · ${num(ov.totals.sessions)} sessions · last sync ${st.status && st.status.last_sync ? ago(st.status.last_sync) : "none yet"}` : "";
+    const tools = S.settings && S.settings.tools;
+    if (tools) {
+      $$(".side-list li").forEach((li) => {
+        const on = tools[li.dataset.tool];
+        li.classList.toggle("is-off", !on);
+        li.title = on ? "Found on this device" : "Not found on this device";
+        const sm = $("small", li);
+        if (sm) sm.textContent = on ? "" : "n/a";
+      });
+    }
     const lastErr = st.last_error && (!st.status || st.status.phase === "backoff");
     const bell = $("#bell-dot");
     if (bell) bell.hidden = !lastErr && !(S.history[S.history.length - 1] && S.history[S.history.length - 1].conflicts);
@@ -166,8 +185,9 @@
   }
 
   /* ------------------------------------------------------------ pages */
-  const route = () => (location.hash.replace(/^#\/?/, "").split("/")[0] || "dashboard");
+  const route = () => (location.hash.replace(/^#\/?/, "").split(/[\/?]/)[0] || "dashboard");
 
+  let lastRoute = null;
   function renderPage() {
     const r = route();
     $$(".ids-nav__item").forEach((a) => a.classList.toggle("is-active", a.dataset.route === r));
@@ -175,6 +195,8 @@
     const fn = PAGES[r] || PAGES.dashboard;
     if (!S.loadedOnce) { page.innerHTML = `<div class="loading">${loader("circle", "ld--lg")}</div>`; return; }
     const scroll = page.scrollTop;
+    page.classList.toggle("is-entering", r !== lastRoute);
+    lastRoute = r;
     page.innerHTML = fn();
     if (AFTER[r]) AFTER[r]();
     page.scrollTop = scroll;
@@ -238,7 +260,7 @@
           <circle class="ids-gauge__ring" cx="46.5" cy="46.5" r="33" stroke="#2b2b2b" stroke-width="3" stroke-dasharray="${(saved / 100) * C} ${C}" transform="rotate(-90 46.5 46.5)"/>
           <circle class="ids-gauge__ring" cx="46.5" cy="46.5" r="22" stroke="#e3e3e3" stroke-width="2.4"/>
           <circle class="ids-gauge__ring" cx="46.5" cy="46.5" r="22" stroke="#a7a7a7" stroke-width="2.4" stroke-dasharray="${Math.min(1, o.totals.devices / 4) * 138} 200" transform="rotate(-90 46.5 46.5)"/></svg>
-          <div class="ids-gauge__center"><div class="ids-gauge__value">${saved}%</div><div class="ids-gauge__label">space saved</div></div></div>
+          <div class="ids-gauge__center"><div class="ids-gauge__value">${saved}%</div><div class="ids-gauge__label">saved</div></div></div>
         <div class="sto__legend">
           <div><span class="ids-dot"></span>On disk <b>${fmtBytes(disk)}</b></div>
           <div><span class="ids-dot ids-dot--muted"></span>Original <b>${fmtBytes(raw)}</b></div>
@@ -252,7 +274,7 @@
     const items = S.doctor || [];
     const ok = items.filter((x) => x.level === "Ok").length;
     const C = 2 * Math.PI * 17;
-    const rows = items.length ? items.map((x) => `<div class="chk__row is-${x.level.toLowerCase()}"><span class="ids-check ${x.level === "Ok" ? "is-checked" : ""}">${ico("check")}</span><div>${esc(x.title)}${x.detail ? `<small>${esc(x.detail.length > 120 ? x.detail.slice(0, 117) + "…" : x.detail)}</small>` : ""}</div></div>`).join("") : `<div class="loading">${loader("dots")}</div>`;
+    const rows = items.length ? items.map((x) => `<div class="chk__row is-${x.level.toLowerCase()}"><span class="ids-check ${x.level === "Ok" ? "is-checked" : ""}">${ico("check")}</span><div>${esc(x.title)}${x.detail && x.level !== "Ok" ? `<small>${esc(x.detail.length > 110 ? x.detail.slice(0, 107) + "…" : x.detail)}</small>` : ""}</div></div>`).join("") : `<div class="loading">${loader("dots")}</div>`;
     return `<section class="card ids-card ids-card--panel chk">
       <header class="card__head"><h2 class="card__title">Health checks</h2>
         <span class="ring" aria-label="${ok} of ${items.length} checks passed"><svg viewBox="0 0 40 40"><circle class="t" cx="20" cy="20" r="17"/><circle class="v" cx="20" cy="20" r="17" stroke-dasharray="${items.length ? (ok / items.length) * C : 0} ${C}"/></svg>${ok}/${items.length}</span></header>
@@ -292,7 +314,8 @@
         <header class="card__head"><h2 class="card__title">Vault overview</h2><span class="tool">${ico("lock")}</span></header>
         <div class="ov__stats"><div class="ov__stat"><span class="ov__num">${num(t.sessions)}</span><span class="ov__lbl">sessions<br>in the vault</span></div><span class="ov__div"></span>
           <div class="ov__stat"><span class="ov__num">${num(t.projects)}</span><span class="ov__lbl">projects<br>tracked</span></div></div>
-        <div class="ov__bar" title="${cover}% of projects have their folder on this device"><span style="width:${cover}%"></span></div>
+        <div class="ov__bar"><span style="width:${cover}%"></span></div>
+        <div class="ov__cap">${o.projects.filter((p) => p.exists_locally).length} of ${t.projects} project folders are on this device</div>
         <div class="mini-row"><div class="mini">${ico("target")}<b>${num(t.projects)}</b><span>Projects</span></div><div class="mini">${ico("laptop")}<b>${num(t.devices)}</b><span>Devices</span></div><div class="mini">${ico("spiral")}<b>${num(t.files)}</b><span>Files</span></div></div>
       </section>
       <div class="c4">${activityCard()}</div>
@@ -341,6 +364,8 @@
   /* ---- archive ---- */
   let aq = "", acur = null;
   function archivePage() {
+    const hq = new URLSearchParams(location.hash.split("?")[1] || "");
+    if (hq.has("q")) aq = hq.get("q");
     return `<div class="toolbar"><input class="input input--grow" id="aq" placeholder="Search every Claude Code session and imported chat" value="${esc(aq)}" autofocus aria-label="Search sessions"></div>
       <div class="arch"><div class="hits" id="hits"></div><div id="viewer"><div class="viewer"><div class="empty">${loader("ball")}<h3>Pick a conversation</h3><p>Search above, then open a result to read it or copy it as a context pack for a new chat.</p></div></div></div></div>`;
   }
@@ -351,6 +376,7 @@
     try {
       const r = await api("/api/search?q=" + encodeURIComponent(aq));
       if (my !== searchSeq) return;
+      if (r.length && new URLSearchParams(location.hash.split("?")[1] || "").has("open") && !acur) { setTimeout(() => { const b = $(".hit"); if (b) openHit(b); }, 0); }
       hits.innerHTML = r.length ? r.map((h) => `<button class="hit ${acur && acur.id === h.id ? "is-active" : ""}" data-action="open-hit" data-source="${esc(h.source)}" data-id="${esc(h.id)}">
           <div class="hit__top"><span>${esc(h.source)}${h.project ? " · " + esc(baseName(h.project)) : ""}</span><span>${esc(h.updated)}</span></div>
           <div class="hit__title">${esc(h.title || "Untitled")}</div><div class="hit__snip">${esc(h.snippet || h.messages + " messages")}</div></button>`).join("") : `<div class="empty"><h3>No matches</h3><p>Try fewer or different words.</p></div>`;
@@ -388,14 +414,14 @@
   function settingsPage() {
     const s = S.settings;
     return `<div class="stack"><section class="card ids-card"><h2 class="card__title">Vault</h2>
-        <dl class="kv" style="margin-top:14px"><dt>Folder</dt><dd class="mono">${esc(s.vault_path)}</dd><dt>Vault id</dt><dd class="mono">${esc(s.vault_id)}</dd><dt>Sync engine</dt><dd>${s.engine ? "Running" : "Not running (read-only view)"}</dd></dl></section>
+        <dl class="kv kv--left" style="margin-top:14px"><dt>Folder</dt><dd class="mono">${esc(s.vault_path)}</dd><dt>Vault id</dt><dd class="mono">${esc(s.vault_id)}</dd><dt>Sync engine</dt><dd>${s.engine ? "Running" : "Not running (read-only view)"}</dd></dl></section>
       <section class="card ids-card"><h2 class="card__title">Never upload these projects</h2><p class="small muted" style="margin-top:6px">Plugin-generated or noisy projects. Anything already in the vault stays there.</p>
         <div class="tags">${s.exclude_projects.length ? s.exclude_projects.map((p) => `<span class="tag">${esc(p)}<button data-action="unexclude" data-path="${esc(p)}" aria-label="Stop excluding ${esc(p)}">${ico("x")}</button></span>`).join("") : `<span class="small muted">Nothing excluded.</span>`}</div>
         <form class="inline" data-form="exclude"><input class="input input--grow" name="path" placeholder="~/.claude-mem/observer-sessions" aria-label="Project path to exclude"><button class="ids-btn ids-btn--dark" type="submit">Exclude</button></form></section>
       <section class="card ids-card"><h2 class="card__title">Kept on each device</h2><p class="small muted" style="margin-top:6px">These <span class="mono">settings.json</span> keys hold machine-specific commands or paths, so they never leave the device they belong to.</p>
         <div class="tags">${s.local_keys.map((k) => `<span class="tag is-fixed mono">${esc(k)}</span>`).join("")}</div></section>
       <section class="card ids-card"><h2 class="card__title">Folders on this device</h2>
-        <dl class="kv" style="margin-top:14px"><dt>Claude Code</dt><dd class="mono">${esc(s.claude_dir)}</dd><dt>Codex</dt><dd class="mono">${esc(s.codex_dir)}</dd><dt>Vault state</dt><dd class="mono">${esc(s.state_dir)}</dd></dl></section></div>`;
+        <dl class="kv kv--left" style="margin-top:14px"><dt>Claude Code</dt><dd class="mono">${esc(s.claude_dir)}</dd><dt>Codex</dt><dd class="mono">${esc(s.codex_dir)}</dd><dt>Vault state</dt><dd class="mono">${esc(s.state_dir)}</dd></dl></section></div>`;
   }
 
   const PAGES = { dashboard: dashboardPage, projects: projectsPage, devices: devicesPage, archive: archivePage, health: healthPage, settings: settingsPage };
@@ -499,9 +525,11 @@
     try {
       await loadCore();
       renderPage();
-      connectEvents();
-      setInterval(() => { if (S.status && S.status.engine) updateLive(); }, 30000);
-      setInterval(async () => { try { await loadCore(); updateLive(); } catch (_) {} }, 60000);
+      if (!params.has("static")) connectEvents(); // ?static: no live stream (used for screenshots)
+      if (!params.has("static")) {
+        setInterval(() => { if (S.status && S.status.engine) updateLive(); }, 30000);
+        setInterval(async () => { try { await loadCore(); updateLive(); } catch (_) {} }, 60000);
+      }
     } catch (e) {
       $("#page").innerHTML = `<div class="empty"><h3>Can't reach the vault service</h3><p>${esc(e.message)}</p></div>`;
     }

@@ -331,8 +331,22 @@ fn open_app_window(url: &str) {
             r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
             r"C:\Program Files\Google\Chrome\Application\chrome.exe",
         ];
-        for c in candidates {
-            if std::path::Path::new(c).exists() && Command::new(c).arg(format!("--app={url}")).spawn().is_ok() {
+        let mut found: Vec<String> = candidates.iter().map(|c| c.to_string()).collect();
+        for exe in ["msedge.exe", "chrome.exe"] {
+            for hive in ["HKLM", "HKCU"] {
+                let key = format!(r"{hive}\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{exe}");
+                if let Ok(out) = Command::new("reg").args(["query", &key, "/ve"]).output() {
+                    let text = String::from_utf8_lossy(&out.stdout);
+                    if let Some(line) = text.lines().find(|l| l.contains("REG_SZ")) {
+                        if let Some(p) = line.split("REG_SZ").nth(1) {
+                            found.insert(0, p.trim().to_string());
+                        }
+                    }
+                }
+            }
+        }
+        for c in found {
+            if std::path::Path::new(&c).exists() && Command::new(&c).arg(format!("--app={url}")).spawn().is_ok() {
                 return;
             }
         }

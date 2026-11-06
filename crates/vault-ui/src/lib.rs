@@ -426,6 +426,7 @@ impl App {
                         "user": std::env::var("USERNAME").or_else(|_| std::env::var("USER")).unwrap_or_default(),
                         "exclude_projects": cfg.get("exclude_projects").cloned().unwrap_or(json!([])),
                         "local_keys": self.env.local_keys,
+                        "tools": { "claude_code": self.env.claude_dir.is_dir(), "codex": self.env.codex_dir.is_dir(), "claude_desktop": self.env.desktop_cfg.is_file() },
                         "claude_dir": self.env.claude_dir, "codex_dir": self.env.codex_dir,
                         "state_dir": self.env.state_dir, "engine": self.handle.is_some(),
                     }))
