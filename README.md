@@ -3,7 +3,7 @@
 Carry your Claude Code, Codex and Claude Desktop sessions between computers. Everything in the vault is
 encrypted, and a plain file-sync tool (OneDrive, Google Drive, Dropbox, Syncthing, a USB stick) can't corrupt it.
 
-Status: **core + CLI working** (`avault`), 27 automated tests. The desktop UI is waiting on designs.
+Status: **core + CLI working** (`avault`), 28 automated tests. The desktop UI is waiting on designs.
 
 ```
 crates/vault-core   library: crypto, vault store, sync engine, archive/search, doctor (no UI)
@@ -19,6 +19,8 @@ avault doctor                                  # checks for the common gotchas
 avault sync --redact                           # strip API keys/tokens from logs before they leave this device
 avault sync --block-secrets                    # or refuse to upload logs that contain them
 avault verify --deep                           # integrity check of every vault file
+avault remember                                # keep the passphrase in the OS credential store (daemon runs unattended)
+avault overview --json                         # devices / projects / totals as JSON for a UI
 avault devices                                 # who uses this vault (--remove <id> to forget one)
 avault daemon                                  # always-on engine: file watching, syncs only what changed
 avault import-v1 "<old python vault>\data"     # bring over a vault made by the Python version
@@ -61,7 +63,7 @@ Logins (`.credentials.json`, `auth.json`) and `settings.local.json` never leave 
 
 ## Roadmap (from the pain-point research)
 
-Done: key-level `settings.json` merge with per-machine keys, `--block-secrets`, consistent snapshots of live SQLite databases (Codex history) via SQLite's backup API, `verify`, `devices`, chunked streaming storage, always-on engine, `--redact`, Python-vault import, portable project ids, log merge, conflict detection, encryption of everything, recovery key, atomic writes,
+Done: OS keychain storage (`remember`), UI view-model API (`vault_core::overview`), key-level `settings.json` merge with per-machine keys, `--block-secrets`, consistent snapshots of live SQLite databases (Codex history) via SQLite's backup API, `verify`, `devices`, chunked streaming storage, always-on engine, `--redact`, Python-vault import, portable project ids, log merge, conflict detection, encryption of everything, recovery key, atomic writes,
 partial-line guard, MSIX desktop path, secret scan in `doctor`, retention warning.
 
 Next:
@@ -69,7 +71,7 @@ Next:
 2. Streaming merge for logs over 2 GiB (smaller logs merge in memory; larger ones are skipped and reported). Content-defined chunking if edits-in-the-middle ever matter.
 4. Run the engine as an OS service / tray item (the engine itself exists: `avault daemon`).
 6. Per-OS layers for `settings.json` (key-level merge and per-machine keys already exist).
-7. Device enrollment code + revoke; OS keychain storage for the passphrase.
+7. Device enrollment code (a second device joins without typing the passphrase).
 8. Full-text index (tantivy) and neutral session schema for Codex rollouts.
 9. `relocate` command and a per-Claude-version compatibility self-test for the project-folder encoding.
 10. Import v1 settings/MCP (their encrypted fields) - needs scrypt + AES-GCM decrypt.

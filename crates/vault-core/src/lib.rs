@@ -8,6 +8,7 @@ pub mod engine;
 pub mod env;
 pub mod jsonl;
 pub mod legacy;
+pub mod overview;
 pub mod paths;
 pub mod secrets;
 pub mod sqlite;

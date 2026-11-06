@@ -82,6 +82,12 @@ enum Cmd {
         #[arg(long)]
         deep: bool,
     },
+    /// Store the vault passphrase in the OS credential store (Windows Credential Manager / macOS Keychain / Secret Service), so the daemon and later commands don't ask.
+    Remember,
+    /// Remove the stored passphrase from the OS credential store.
+    Forget,
+    /// Summary of the vault for a UI: devices, projects (with local paths), totals. Use with --json.
+    Overview,
     /// List the devices using this vault, or forget one.
     Devices {
         /// Forget the device whose id starts with this (then run `gc`).
@@ -122,6 +128,10 @@ fn save_vault(env: &Env, p: &Path) -> Result<()> {
     Ok(())
 }
 
+fn keyring_entry(vault_id: &str) -> Option<keyring::Entry> {
+    keyring::Entry::new("ai-session-vault", vault_id).ok()
+}
+
 fn prompt_secret(label: &str) -> Result<String> {
     if let Ok(p) = std::env::var("AI_VAULT_PASSPHRASE") {
         if !p.is_empty() {
@@ -143,8 +153,16 @@ fn open(cli: &Cli, env: &Env) -> Result<Store> {
     if !Store::exists(&dir) {
         bail!("no vault in {} - if it is still syncing, wait for it to finish; otherwise run `avault init`", dir.display());
     }
-    let secret = prompt_secret("Vault passphrase (or recovery key): ")?;
-    let store = Store::open(&dir, &secret)?;
+    let vault_id = Store::read_header(&dir)?.vault_id;
+    let env_pw_set = std::env::var("AI_VAULT_PASSPHRASE").map_or(false, |p| !p.is_empty());
+    let from_keyring = if env_pw_set { None } else { keyring_entry(&vault_id).and_then(|e| e.get_password().ok()) };
+    let store = match from_keyring {
+        Some(pw) if !pw.is_empty() => Store::open(&dir, &pw).or_else(|_| {
+            eprintln!("(the stored passphrase no longer works; ask for it again)");
+            Store::open(&dir, &prompt_secret("Vault passphrase (or recovery key): ")?)
+        })?,
+        _ => Store::open(&dir, &prompt_secret("Vault passphrase (or recovery key): ")?)?,
+    };
     save_vault(env, &dir)?;
     Ok(store)
 }
@@ -426,6 +444,36 @@ fn run() -> Result<()> {
                     }
                     Event::Error { message } => eprintln!("  error (will retry): {message}"),
                     Event::Log { message } => println!("{message}"),
+                }
+            }
+        }
+        Cmd::Remember => {
+            let store = open(&cli, &env)?;
+            let pw = prompt_secret("Passphrase to remember (re-enter; not the recovery key): ")?;
+            Store::open(&store.root, &pw)?;
+            keyring_entry(&store.header.vault_id)
+                .ok_or_else(|| anyhow!("no OS credential store available"))?
+                .set_password(&pw)
+                .map_err(|e| anyhow!("could not store the passphrase: {e}"))?;
+            println!("Passphrase stored in your OS credential store for this vault. `avault forget` removes it.");
+        }
+        Cmd::Forget => {
+            let dir = vault_dir(&cli, &env)?;
+            let id = Store::read_header(&dir)?.vault_id;
+            if let Some(e) = keyring_entry(&id) {
+                let _ = e.delete_credential();
+            }
+            println!("Stored passphrase removed.");
+        }
+        Cmd::Overview => {
+            let store = open(&cli, &env)?;
+            let o = vault_core::overview::overview(&env, &store, &[])?;
+            if cli.json {
+                println!("{}", serde_json::to_string(&o)?);
+            } else {
+                println!("Vault {} ({} devices, {} projects, {} sessions, {:.1} MB)", o.vault_path, o.totals.devices, o.totals.projects, o.totals.sessions, o.totals.bytes as f64 / 1_048_576.0);
+                for p in o.projects.iter().take(25) {
+                    println!("  {:<48} {:>4} sessions  {}", p.portable_path.chars().take(48).collect::<String>(), p.sessions, if p.exists_locally { "" } else { "(folder not on this device)" });
                 }
             }
         }

@@ -377,3 +377,23 @@ fn block_secrets_refuses_to_upload_logs_with_keys() {
     assert!(ms[0].entries.keys().any(|k| k.ends_with("clean.jsonl")));
     assert!(!ms[0].entries.keys().any(|k| k.ends_with("leaky.jsonl")));
 }
+
+#[test]
+fn overview_summarises_projects_for_a_ui() {
+    let vault = tempfile::tempdir().unwrap();
+    let (store, _) = Store::init(vault.path(), PASS, fast()).unwrap();
+    let mut a = Device::new();
+    fs::create_dir_all(a.project_dir("app")).unwrap();
+    a.write(&a.session_file("app", "s1"), &a.session_line("app", 1));
+    a.write(&a.session_file("app", "s2"), &a.session_line("app", 2));
+    a.sync(&store);
+    let mut b = Device::new();
+    fs::create_dir_all(b.project_dir("app")).unwrap();
+    b.sync(&store);
+    let o = vault_core::overview::overview(&b.env, &store, &[]).unwrap();
+    assert_eq!((o.totals.devices, o.totals.projects, o.totals.sessions), (2, 1, 2), "{o:?}");
+    let p = &o.projects[0];
+    assert_eq!(p.portable_path, "~/app");
+    assert!(p.exists_locally && p.devices.len() == 2, "{p:?}");
+    assert_eq!(o.devices.iter().filter(|d| d.this_device).count(), 1);
+}
