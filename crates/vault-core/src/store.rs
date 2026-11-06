@@ -195,6 +195,44 @@ impl Store {
         Ok((out, warn))
     }
 
+    /// Check that every object the manifests reference exists (and, with `deep`, decrypts and matches
+    /// its id). A cloud folder that is still syncing, or a damaged copy, shows up here.
+    pub fn verify(&self, manifests: &[Manifest], deep: bool) -> VerifyReport {
+        let mut rep = VerifyReport::default();
+        let mut seen = std::collections::HashSet::new();
+        for m in manifests {
+            for (logical, e) in &m.entries {
+                for id in Self::chunk_ids(e) {
+                    if !seen.insert(id.to_string()) {
+                        continue;
+                    }
+                    rep.objects += 1;
+                    if !self.has_object(id) {
+                        rep.missing.push(format!("{} ({}): {}", logical, m.device.name, &id[..12]));
+                    } else if deep {
+                        if let Err(err) = self.get(id) {
+                            rep.corrupt.push(format!("{} ({}): {} - {err}", logical, m.device.name, &id[..12]));
+                        }
+                    }
+                }
+            }
+        }
+        rep
+    }
+
+    /// Forget a device (its manifest). Its data is freed by `gc` unless another device has the same files.
+    pub fn remove_device(&self, device_id: &str) -> Result<()> {
+        if device_id.is_empty() || device_id.contains(['/', '\\', '.']) {
+            bail!("invalid device id");
+        }
+        let dir = self.root.join("devices").join(device_id);
+        if !dir.is_dir() {
+            bail!("no such device");
+        }
+        fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
     pub fn save_header(&self) -> Result<()> {
         atomic_write(&self.root.join("vault.json"), &serde_json::to_vec_pretty(&self.header)?)
     }
@@ -320,4 +358,11 @@ impl Write for ChunkWriter<'_> {
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
+}
+
+#[derive(Default, Debug, Serialize)]
+pub struct VerifyReport {
+    pub objects: usize,
+    pub missing: Vec<String>,
+    pub corrupt: Vec<String>,
 }

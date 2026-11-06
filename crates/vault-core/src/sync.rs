@@ -366,6 +366,18 @@ fn prepare_to(item: &Item, env: &Env, redact: bool, out: &mut dyn Write) -> Resu
             None => Ok(false),
         };
     }
+    if crate::sqlite::is_sqlite(&item.local) {
+        // Live database: take a consistent snapshot with SQLite's backup API, then stream that.
+        let tmp = env.state_dir.join("tmp").join(format!("snap-{}.sqlite", std::process::id()));
+        if let Some(d) = tmp.parent() {
+            fs::create_dir_all(d)?;
+        }
+        let r = crate::sqlite::snapshot(&item.local, &tmp)
+            .and_then(|_| Ok(std::io::copy(&mut fs::File::open(&tmp)?, out).map(|_| ())?));
+        let _ = fs::remove_file(&tmp);
+        r?;
+        return Ok(true);
+    }
     let f = fs::File::open(&item.local)?;
     if item.kind == Kind::Log {
         let mut r = BufReader::with_capacity(256 * 1024, f);
@@ -510,11 +522,11 @@ pub fn backup(env: &Env, store: &Store, state: &mut State, opts: &Options, log: 
             rep.skipped_large.push(item.local.display().to_string());
             continue;
         }
-        if sqlite_busy(&item.local) {
-            rep.busy.push(item.local.file_name().unwrap().to_string_lossy().into_owned());
-            continue;
-        }
-        let (size, mt) = (md.len(), mtime_ms(&md));
+        let (size, mt) = if crate::sqlite::is_sqlite(&item.local) {
+            crate::sqlite::fingerprint(&item.local).unwrap_or((md.len(), mtime_ms(&md)))
+        } else {
+            (md.len(), mtime_ms(&md))
+        };
         let have = manifest.entries.get(&item.logical).map(|e| e.hash.clone());
         if let Some(c) = state.files.get(&item.logical) {
             if c.size == size && c.mtime_ms == mt && Some(&c.local_hash) == have.as_ref() {
@@ -596,7 +608,11 @@ pub fn backup(env: &Env, store: &Store, state: &mut State, opts: &Options, log: 
 // ==================================================================== restore
 fn local_hash_of(item: &Item, env: &Env, store: &Store, state: &mut State, redact: bool) -> Option<(String, i64)> {
     let md = fs::metadata(&item.local).ok()?;
-    let (size, mt) = (md.len(), mtime_ms(&md));
+    let (size, mt) = if crate::sqlite::is_sqlite(&item.local) {
+        crate::sqlite::fingerprint(&item.local).unwrap_or((md.len(), mtime_ms(&md)))
+    } else {
+        (md.len(), mtime_ms(&md))
+    };
     if let Some(c) = state.files.get(&item.logical) {
         if c.size == size && c.mtime_ms == mt && !c.local_hash.is_empty() {
             return Some((c.local_hash.clone(), mt));

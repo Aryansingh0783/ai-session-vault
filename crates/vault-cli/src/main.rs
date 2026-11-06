@@ -74,6 +74,17 @@ enum Cmd {
     Recovery,
     /// Remove vault objects no device references any more.
     Gc,
+    /// Check the vault's integrity (every file the manifests list is present; --deep also decrypts them).
+    Verify {
+        #[arg(long)]
+        deep: bool,
+    },
+    /// List the devices using this vault, or forget one.
+    Devices {
+        /// Forget the device whose id starts with this (then run `gc`).
+        #[arg(long)]
+        remove: Option<String>,
+    },
     /// Bring a vault made by the Python version (its `data` folder) into this one.
     ImportV1 { data_dir: PathBuf },
     /// Run the always-on engine: watches your sessions and the vault, syncs only what changed.
@@ -411,6 +422,57 @@ fn run() -> Result<()> {
                     Event::Error { message } => eprintln!("  error (will retry): {message}"),
                     Event::Log { message } => println!("{message}"),
                 }
+            }
+        }
+        Cmd::Verify { deep } => {
+            let store = open(&cli, &env)?;
+            let (ms, warns) = store.read_all_manifests()?;
+            let r = store.verify(&ms, *deep);
+            if cli.json {
+                println!("{}", serde_json::to_string(&r)?);
+            } else {
+                for w in &warns {
+                    println!("  ! {w}");
+                }
+                println!("Checked {} object(s){}.", r.objects, if *deep { " (decrypted and verified)" } else { " (presence only; use --deep to decrypt)" });
+                for m in r.missing.iter().take(20) {
+                    println!("  MISSING {m}");
+                }
+                for c in r.corrupt.iter().take(20) {
+                    println!("  CORRUPT {c}");
+                }
+                if r.missing.is_empty() && r.corrupt.is_empty() && warns.is_empty() {
+                    println!("Vault is healthy.");
+                } else if !r.missing.is_empty() {
+                    println!("Missing files usually mean the cloud folder is still syncing - wait, then run verify again. If they stay missing, run `avault sync` on the device that has them.");
+                }
+            }
+            if !r.missing.is_empty() || !r.corrupt.is_empty() {
+                std::process::exit(3);
+            }
+        }
+        Cmd::Devices { remove } => {
+            let store = open(&cli, &env)?;
+            if let Some(prefix) = remove {
+                let (ms, _) = store.read_all_manifests()?;
+                let hits: Vec<_> = ms.iter().filter(|m| m.device.id.starts_with(prefix.as_str())).collect();
+                match hits.as_slice() {
+                    [m] => {
+                        store.remove_device(&m.device.id)?;
+                        println!("Forgot {} ({}). Run `avault gc` to free space.", m.device.name, m.device.id);
+                    }
+                    [] => bail!("no device id starts with '{prefix}'"),
+                    _ => bail!("several devices match; use more characters"),
+                }
+                return Ok(());
+            }
+            let me = State::load(&env).device_id;
+            let (ms, _) = store.read_all_manifests()?;
+            if cli.json {
+                println!("{}", serde_json::to_string(&ms.iter().map(|m| serde_json::json!({"id": m.device.id, "name": m.device.name, "os": m.device.os, "updated": m.updated, "files": m.entries.len(), "this_device": m.device.id == me})).collect::<Vec<_>>())?);
+            }
+            for m in ms.iter().filter(|_| !cli.json) {
+                println!("{}  {} ({}){}  last sync {}  {} files", m.device.id, m.device.name, m.device.os, if m.device.id == me { "  <- this device" } else { "" }, m.updated, m.entries.len());
             }
         }
         Cmd::Gc => {

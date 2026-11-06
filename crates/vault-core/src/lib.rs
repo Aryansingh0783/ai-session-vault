@@ -10,6 +10,7 @@ pub mod jsonl;
 pub mod legacy;
 pub mod paths;
 pub mod secrets;
+pub mod sqlite;
 pub mod store;
 pub mod sync;
 pub mod util;
