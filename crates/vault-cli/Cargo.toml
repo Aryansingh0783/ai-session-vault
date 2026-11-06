@@ -1,0 +1,17 @@
+[package]
+name = "vault-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "avault"
+path = "src/main.rs"
+
+[dependencies]
+vault-core = { path = "../vault-core" }
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env"] }
+rpassword = "7"
+walkdir = "2"
+serde_json = "1"
