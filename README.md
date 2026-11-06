@@ -15,6 +15,24 @@ crates/vault-cli    `avault` command line, with --json output
 crates/vault-ui     the app: a local web UI (iDraft-style design) served by the Rust core, over the live engine
 ```
 
+## Screenshots
+
+<p align="center"><img src="docs/screenshots/dashboard-light.png" alt="Dashboard: vault overview, sync activity, storage, health checks and the live sync engine" width="860"></p>
+
+| | |
+|---|---|
+| ![Projects](docs/screenshots/projects.png) **Projects** from every device, with the folder status on this one. | ![Devices](docs/screenshots/devices.png) **Devices** sharing the vault, and passphrase-free access you can revoke. |
+| ![Archive](docs/screenshots/archive-reader-dark.png) **Archive**: search and read any session, or copy it as a context pack for a new chat (dark theme). | ![Health](docs/screenshots/health.png) **Health**: checks, integrity verification and cleanup. |
+| ![Add a device](docs/screenshots/add-device.png) **Add a device** with a one-time code. The passphrase is never shared. | ![Themes](docs/screenshots/settings-themes.png) **Settings**: five themes, saved per device. |
+
+Same dashboard in the other themes:
+
+| Dark | Sand | Ocean |
+|---|---|---|
+| ![Dark](docs/screenshots/dashboard-dark.png) | ![Sand](docs/screenshots/dashboard-sand.png) | ![Ocean](docs/screenshots/dashboard-ocean.png) |
+
+(Screenshots use a demo vault with made-up sessions.)
+
 ## Install
 
 Download the zip/tarball for your system from the [Releases page](https://github.com/Aryansingh0783/ai-session-vault/releases), unpack it anywhere and run `avault` from a terminal (`avault-window` and `WebView2Loader.dll`, where present, must stay next to it for `avault app`). Or build it yourself: `cargo build --release`.

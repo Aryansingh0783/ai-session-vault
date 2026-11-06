@@ -62,7 +62,8 @@
 :root[data-theme="dark"] .code { background: #0f0f0f; color: #fff; }
 :root[data-theme="dark"] .ids-toast { background: #f1f1f1; color: #161616; }
 :root[data-theme="dark"] { --id-sub: #b5b5b5; }
-:root[data-theme="dark"] .ids-check.is-checked { color: var(--id-on-ink); }
+:root[data-theme="dark"] .ids-check { background: transparent; border-color: #5a5a5a; }
+:root[data-theme="dark"] .ids-check.is-checked { background: var(--id-ink); border-color: var(--id-ink); color: var(--id-on-ink); }
 :root[data-theme="dark"] .hit__snip { color: #a5a5a5; }
 :root[data-theme="dark"] .hit.is-active .hit__snip { color: #444; }
 :root[data-theme="dark"] .hit.is-active .hit__top { color: #555; }

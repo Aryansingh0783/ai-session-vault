@@ -74,6 +74,7 @@ A sync does **restore, then backup**: it first pulls what other computers publis
 - **Different folder layouts:** projects are matched by portable ids, so `C:\Users\you\code\app` on Windows and
   `/home/you/code/app` on Linux are the same project. If you keep code in different places, remap with `--map "OLD=NEW"` (for example `--map "D:\work=~/work"`).
 - **Preview first:** `avault sync --dry-run` shows what would change without changing anything.
+- **Name your computers:** devices show their hostname. Set `AI_VAULT_DEVICE_NAME="Work laptop"` to use a friendlier name.
 - **Back up the recovery key** separately from the vault folder.
 
 ## Troubleshooting

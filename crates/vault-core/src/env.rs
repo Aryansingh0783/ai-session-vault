@@ -169,7 +169,7 @@ impl State {
     pub fn device_info(&self, env: &Env) -> DeviceInfo {
         DeviceInfo {
             id: self.device_id.clone(),
-            name: gethostname::gethostname().to_string_lossy().into_owned(),
+            name: std::env::var("AI_VAULT_DEVICE_NAME").ok().filter(|n| !n.trim().is_empty()).unwrap_or_else(|| gethostname::gethostname().to_string_lossy().into_owned()),
             os: std::env::consts::OS.into(),
             home: env.home.to_string_lossy().into_owned(),
         }

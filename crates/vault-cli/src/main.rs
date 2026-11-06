@@ -364,7 +364,7 @@ fn open_app_window(url: &str) {
 }
 
 fn gethostname_string() -> String {
-    std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).unwrap_or_else(|_| "this device".into())
+    std::env::var("AI_VAULT_DEVICE_NAME").or_else(|_| std::env::var("COMPUTERNAME")).or_else(|_| std::env::var("HOSTNAME")).unwrap_or_else(|_| "this device".into())
 }
 
 fn main() {
