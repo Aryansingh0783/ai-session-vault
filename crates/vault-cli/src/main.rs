@@ -37,6 +37,9 @@ struct SyncArgs {
     /// Replace API keys/tokens found in session logs before uploading.
     #[arg(long)]
     redact: bool,
+    /// Refuse to upload session logs that contain API keys/tokens (listed in the report).
+    #[arg(long)]
+    block_secrets: bool,
 }
 
 #[derive(Subcommand)]
@@ -151,7 +154,7 @@ fn options(a: &SyncArgs) -> Result<Options> {
         Some(s) => s.split(',').map(|c| Component::parse(c.trim())).collect::<Result<Vec<_>>>()?,
         None => Component::ALL.to_vec(),
     };
-    Ok(Options { components, maps: parse_maps(&a.maps)?, dry_run: a.dry_run, redact: a.redact, ..Options::default() })
+    Ok(Options { components, maps: parse_maps(&a.maps)?, dry_run: a.dry_run, redact: a.redact, block_secrets: a.block_secrets, ..Options::default() })
 }
 
 fn print_report(r: &Report, json: bool) {
@@ -166,13 +169,14 @@ fn print_report(r: &Report, json: bool) {
     if r.safety_copies > 0 {
         println!("  {} replaced file(s) were saved first (in ~/.ai-vault/safety-copies)", r.safety_copies);
     }
-    let sections: [(&str, &Vec<String>); 7] = [
+    let sections: [(&str, &Vec<String>); 8] = [
         ("Conflicts (kept the newer version)", &r.conflicts),
         ("Files that couldn't be written", &r.failed),
         ("In use by an app, skipped (quit it and run again)", &r.busy),
         ("MCP servers added", &r.mcp_added),
         ("Project folders missing on this device (sessions restored anyway; clone them or use --map OLD=NEW)", &r.missing_projects),
-        ("Skipped, over 512 MB", &r.skipped_large),
+        ("Skipped, over 2 GB", &r.skipped_large),
+        ("Not uploaded: contain secrets (--block-secrets)", &r.blocked),
         ("Notes", &r.warnings),
     ];
     for (title, items) in sections {
@@ -393,6 +397,7 @@ fn run() -> Result<()> {
                 components: o.components,
                 maps: o.maps,
                 redact: o.redact,
+                block_secrets: o.block_secrets,
                 quiet: std::time::Duration::from_secs(*quiet),
                 full_sync_every: std::time::Duration::from_secs(*full_every),
                 watch: !*no_watch,

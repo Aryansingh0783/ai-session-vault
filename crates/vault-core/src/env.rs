@@ -9,6 +9,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Claude Code settings that run machine-specific commands or point at local paths.
+pub const DEFAULT_LOCAL_KEYS: &[&str] = &["apiKeyHelper", "awsAuthRefresh", "awsCredentialExport", "statusLine", "otelHeadersHelper", "forceLoginOrgUUID"];
+
 #[derive(Clone, Debug)]
 pub struct Env {
     pub home: PathBuf,
@@ -18,6 +21,8 @@ pub struct Env {
     pub desktop_cfg: PathBuf,
     /// Local, never-synced state (device id, last-sync hashes) and safety copies.
     pub state_dir: PathBuf,
+    /// Top-level `settings.json` keys that stay on each device (machine-specific commands/paths).
+    pub local_keys: Vec<String>,
 }
 
 impl Env {
@@ -35,7 +40,13 @@ impl Env {
         };
         let codex_dir = var("CODEX_HOME").unwrap_or_else(|| home.join(".codex"));
         let desktop_cfg = desktop_config_path(&home, test);
-        Ok(Env { state_dir: home.join(".ai-vault"), home, claude_dir, claude_json, codex_dir, desktop_cfg })
+        let state_dir = home.join(".ai-vault");
+        let local_keys = fs::read(state_dir.join("config.json"))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+            .and_then(|v| v.get("local_keys")?.as_array().map(|a| a.iter().filter_map(|k| k.as_str().map(String::from)).collect()))
+            .unwrap_or_else(|| DEFAULT_LOCAL_KEYS.iter().map(|k| k.to_string()).collect());
+        Ok(Env { state_dir, home, claude_dir, claude_json, codex_dir, desktop_cfg, local_keys })
     }
 
     pub fn safety_root(&self) -> PathBuf {

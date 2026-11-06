@@ -27,6 +27,7 @@ pub struct EngineConfig {
     pub components: Vec<Component>,
     pub maps: Vec<PathMap>,
     pub redact: bool,
+    pub block_secrets: bool,
     /// Wait this long after the last file change before syncing (lets a live session finish writing).
     pub quiet: Duration,
     /// Safety net: do a full sync at least this often even if no file event arrived.
@@ -41,6 +42,7 @@ impl Default for EngineConfig {
             components: Component::ALL.to_vec(),
             maps: vec![],
             redact: false,
+            block_secrets: false,
             quiet: Duration::from_secs(8),
             full_sync_every: Duration::from_secs(300),
             watch: true,
@@ -231,6 +233,7 @@ impl Core {
             maps: self.cfg.maps.clone(),
             dry_run: false,
             redact: self.cfg.redact,
+            block_secrets: self.cfg.block_secrets,
             hooks: Hooks {
                 progress: Some(Arc::new(move |phase, done, total| {
                     let _ = etx.send(Event::Progress { phase: phase.into(), done, total });

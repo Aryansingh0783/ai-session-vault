@@ -42,6 +42,7 @@ const EXCLUDE: &[&str] = &[
 const LOG_MEM_CAP: u64 = 2 * 1024 * 1024 * 1024;
 const TOL_MS: i64 = 2000;
 const MCP: &str = "claude-code/mcp_servers.json";
+const SETTINGS: &str = "claude-code/config/settings.json";
 const DESKTOP: &str = "claude-desktop/claude_desktop_config.json";
 const KEEP_SAFETY_RUNS: usize = 10;
 const MAX_SAFETY_BYTES: u64 = 3 * 1024 * 1024 * 1024;
@@ -98,6 +99,8 @@ pub struct Options {
     pub dry_run: bool,
     /// Replace API keys/tokens in session logs before they leave this device.
     pub redact: bool,
+    /// Refuse to upload session logs that contain secret-looking strings (they are listed in the report).
+    pub block_secrets: bool,
     pub hooks: Hooks,
     /// When set, only these local files are examined (incremental backup after file-watch events).
     pub only_paths: Option<Arc<HashSet<PathBuf>>>,
@@ -105,7 +108,7 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options { components: Component::ALL.to_vec(), maps: vec![], dry_run: false, redact: false, hooks: Hooks::default(), only_paths: None }
+        Options { components: Component::ALL.to_vec(), maps: vec![], dry_run: false, redact: false, block_secrets: false, hooks: Hooks::default(), only_paths: None }
     }
 }
 
@@ -123,6 +126,7 @@ pub struct Report {
     pub mcp_added: Vec<String>,
     pub missing_projects: Vec<String>,
     pub skipped_large: Vec<String>,
+    pub blocked: Vec<String>,
     pub bytes_uploaded: u64,
     pub bytes_downloaded: u64,
     pub cancelled: bool,
@@ -142,6 +146,7 @@ impl Report {
             (&mut self.conflicts, o.conflicts), (&mut self.failed, o.failed), (&mut self.busy, o.busy),
             (&mut self.warnings, o.warnings), (&mut self.mcp_added, o.mcp_added),
             (&mut self.missing_projects, o.missing_projects), (&mut self.skipped_large, o.skipped_large),
+            (&mut self.blocked, o.blocked),
         ] {
             a.extend(b);
         }
@@ -366,6 +371,11 @@ fn prepare_to(item: &Item, env: &Env, redact: bool, out: &mut dyn Write) -> Resu
             None => Ok(false),
         };
     }
+    if item.logical == SETTINGS {
+        let raw = fs::read(&item.local)?;
+        out.write_all(&filter_settings(&raw, &env.local_keys))?;
+        return Ok(true);
+    }
     if crate::sqlite::is_sqlite(&item.local) {
         // Live database: take a consistent snapshot with SQLite's backup API, then stream that.
         let tmp = env.state_dir.join("tmp").join(format!("snap-{}.sqlite", std::process::id()));
@@ -399,6 +409,115 @@ fn prepare_to(item: &Item, env: &Env, redact: bool, out: &mut dyn Write) -> Resu
 fn prepare_mem(item: &Item, env: &Env, redact: bool) -> Result<Option<Vec<u8>>> {
     let mut v = Vec::new();
     Ok(prepare_to(item, env, redact, &mut v)?.then_some(v))
+}
+
+/// `settings.json` minus the machine-specific keys, in a canonical form. Unparseable files pass through.
+fn filter_settings(raw: &[u8], local_keys: &[String]) -> Vec<u8> {
+    let parsed = serde_json::from_slice::<Value>(raw.strip_prefix(b"\xef\xbb\xbf").unwrap_or(raw));
+    match parsed {
+        Ok(Value::Object(mut o)) => {
+            for k in local_keys {
+                o.shift_remove(k);
+            }
+            let mut out = serde_json::to_vec_pretty(&Value::Object(o)).unwrap_or_else(|_| raw.to_vec());
+            out.push(b'\n');
+            out
+        }
+        _ => raw.to_vec(),
+    }
+}
+
+/// Install shared settings but keep this device's own values for the machine-specific keys.
+fn install_settings(env: &Env, store: &Store, e: &Entry, path: &Path, safety: &mut SafetyCopies) -> Result<()> {
+    let remote = store.read_all(e)?;
+    let mut merged = match serde_json::from_slice::<Value>(&remote) {
+        Ok(Value::Object(o)) => o,
+        _ => return install_stream(store, e, path, safety),
+    };
+    if let Ok(local_raw) = fs::read(path) {
+        if let Ok(Value::Object(local)) = serde_json::from_slice::<Value>(local_raw.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&local_raw)) {
+            for k in &env.local_keys {
+                if let Some(v) = local.get(k) {
+                    merged.insert(k.clone(), v.clone());
+                }
+            }
+        }
+    }
+    let mut out = serde_json::to_vec_pretty(&Value::Object(merged))?;
+    out.push(b'\n');
+    safety.save(path)?;
+    atomic_write(path, &out)?;
+    set_mtime(path, e.mtime_ms);
+    Ok(())
+}
+
+/// `settings.json` is merged key by key instead of replaced as a whole file:
+/// keys only one side has are kept, machine-specific keys never leave their device, and when both
+/// sides set a key differently the newer file's value wins (and the difference is reported).
+#[allow(clippy::too_many_arguments)]
+fn restore_settings(env: &Env, store: &Store, state: &mut State, item: &Item, winner: &Entry, local: Option<&(String, i64)>, opts: &Options, safety: &mut SafetyCopies, rep: &mut Report) -> Result<()> {
+    let Ok(Value::Object(remote)) = serde_json::from_slice::<Value>(&store.read_all(winner)?) else {
+        return Ok(());
+    };
+    let local_obj = fs::read(&item.local).ok().and_then(|b| match serde_json::from_slice::<Value>(b.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&b)) {
+        Ok(Value::Object(o)) => Some(o),
+        _ => None,
+    });
+    let lmt = local.map(|l| l.1).unwrap_or(0);
+    let remote_newer = winner.mtime_ms > lmt + TOL_MS;
+    let mut merged = local_obj.clone().unwrap_or_default();
+    let mut differing = vec![];
+    for (k, rv) in &remote {
+        if env.local_keys.contains(k) {
+            continue;
+        }
+        match merged.get(k) {
+            None => {
+                merged.insert(k.clone(), rv.clone());
+            }
+            Some(lv) if lv == rv => {}
+            Some(_) => {
+                differing.push(k.clone());
+                if remote_newer {
+                    merged.insert(k.clone(), rv.clone());
+                }
+            }
+        }
+    }
+    if local_obj.is_some() && !differing.is_empty() {
+        rep.conflicts.push(format!("settings.json: {} set differently on two devices; kept the newer value (replaced values are in the safety copy)", differing.join(", ")));
+    }
+    if local_obj.as_ref() == Some(&merged) {
+        rep.unchanged += 1;
+        return Ok(());
+    }
+    rep.downloaded += 1;
+    if opts.dry_run {
+        return Ok(());
+    }
+    let mut out = serde_json::to_vec_pretty(&Value::Object(merged))?;
+    out.push(b'\n');
+    safety.save(&item.local)?;
+    atomic_write(&item.local, &out)?;
+    let md = fs::metadata(&item.local)?;
+    let f = state.files.entry(item.logical.clone()).or_default();
+    f.size = md.len();
+    f.mtime_ms = mtime_ms(&md);
+    f.local_hash = store.keys.object_id(&filter_settings(&out, &env.local_keys));
+    Ok(())
+}
+
+fn file_has_secrets(path: &Path) -> bool {
+    let Ok(f) = fs::File::open(path) else { return false };
+    let mut r = BufReader::with_capacity(256 * 1024, f);
+    let mut line = Vec::new();
+    while r.read_until(b'\n', &mut line).map_or(false, |n| n > 0) {
+        if crate::secrets::count(&line) > 0 {
+            return true;
+        }
+        line.clear();
+    }
+    false
 }
 
 /// Write an entry's content to `path` through a temp file, verifying it before it replaces anything.
@@ -520,6 +639,10 @@ pub fn backup(env: &Env, store: &Store, state: &mut State, opts: &Options, log: 
         };
         if item.kind == Kind::Log && md.len() > LOG_MEM_CAP {
             rep.skipped_large.push(item.local.display().to_string());
+            continue;
+        }
+        if opts.block_secrets && item.kind == Kind::Log && file_has_secrets(&item.local) {
+            rep.blocked.push(item.local.display().to_string());
             continue;
         }
         let (size, mt) = if crate::sqlite::is_sqlite(&item.local) {
@@ -689,7 +812,7 @@ pub fn restore(env: &Env, store: &Store, state: &mut State, opts: &Options, log:
         let local_state = local.is_file().then(|| local_hash_of(&item, env, store, state, opts.redact)).flatten();
         let res = match kind {
             Kind::Log => restore_log(env, store, state, &item, &entries, local_state.as_ref().map(|x| x.0.as_str()), opts, &mut safety, &mut rep),
-            Kind::File => restore_file(store, state, &item, &entries, local_state.as_ref(), opts, &mut safety, &mut rep, log),
+            Kind::File => restore_file(env, store, state, &item, &entries, local_state.as_ref(), opts, &mut safety, &mut rep, log),
         };
         if let Err(e) = res {
             rep.failed.push(format!("{}: {e}", local.display()));
@@ -771,11 +894,18 @@ fn restore_log(env: &Env, store: &Store, state: &mut State, item: &Item, entries
 }
 
 #[allow(clippy::too_many_arguments)]
-fn restore_file(store: &Store, state: &mut State, item: &Item, entries: &[&Entry], local: Option<&(String, i64)>, opts: &Options, safety: &mut SafetyCopies, rep: &mut Report, log: Log) -> Result<()> {
+fn restore_file(env: &Env, store: &Store, state: &mut State, item: &Item, entries: &[&Entry], local: Option<&(String, i64)>, opts: &Options, safety: &mut SafetyCopies, rep: &mut Report, log: Log) -> Result<()> {
     let winner = entries.iter().max_by(|a, b| a.mtime_ms.cmp(&b.mtime_ms).then(a.hash.cmp(&b.hash))).unwrap();
+    if item.logical == SETTINGS {
+        return restore_settings(env, store, state, item, winner, local, opts, safety, rep);
+    }
     let base = state.files.get(&item.logical).and_then(|f| f.synced_hash.clone());
     let install = |state: &mut State, safety: &mut SafetyCopies, rep: &mut Report| -> Result<()> {
-        install_stream(store, winner, &item.local, safety)?;
+        if item.logical == SETTINGS {
+            install_settings(env, store, winner, &item.local, safety)?;
+        } else {
+            install_stream(store, winner, &item.local, safety)?;
+        }
         rep.bytes_downloaded += winner.size;
         let md = fs::metadata(&item.local)?;
         let f = state.files.entry(item.logical.clone()).or_default();

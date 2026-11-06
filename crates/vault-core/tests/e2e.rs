@@ -331,3 +331,49 @@ fn verify_finds_missing_and_corrupt_objects_and_devices_can_be_forgotten() {
     assert!(store.read_all_manifests().unwrap().0.is_empty());
     assert!(store.remove_device("../x").is_err());
 }
+
+#[test]
+fn machine_specific_settings_keys_stay_local() {
+    let vault = tempfile::tempdir().unwrap();
+    let (store, _) = Store::init(vault.path(), PASS, fast()).unwrap();
+    let mut a = Device::new();
+    let mut b = Device::new();
+    let (sa, sb) = (a.env.claude_dir.join("settings.json"), b.env.claude_dir.join("settings.json"));
+    a.write(&sa, r#"{"theme":"dark","statusLine":{"command":"C:/a/status.cmd"},"model":"opus"}"#);
+    b.write(&sb, r#"{"statusLine":{"command":"/home/b/status.sh"}}"#);
+    a.sync(&store);
+    // The vault copy never contains A's machine-specific command.
+    let (ms, _) = store.read_all_manifests().unwrap();
+    let e = &ms[0].entries["claude-code/config/settings.json"];
+    let shared = String::from_utf8(store.read_all(e).unwrap()).unwrap();
+    assert!(shared.contains("\"theme\"") && !shared.contains("status.cmd"), "{shared}");
+
+    let rb = b.sync(&Store::open(vault.path(), PASS).unwrap());
+    assert!(rb.failed.is_empty(), "{rb:?}");
+    let got: serde_json::Value = serde_json::from_str(&fs::read_to_string(&sb).unwrap()).unwrap();
+    assert_eq!(got["theme"], "dark");
+    assert_eq!(got["model"], "opus");
+    assert_eq!(got["statusLine"]["command"], "/home/b/status.sh", "B keeps its own statusLine");
+    // Stable afterwards: no phantom conflict or re-upload.
+    let again = b.sync(&Store::open(vault.path(), PASS).unwrap());
+    assert_eq!((again.uploaded, again.downloaded), (0, 0), "{again:?}");
+    assert!(again.conflicts.is_empty());
+}
+
+#[test]
+fn block_secrets_refuses_to_upload_logs_with_keys() {
+    let vault = tempfile::tempdir().unwrap();
+    let (store, _) = Store::init(vault.path(), PASS, fast()).unwrap();
+    let mut a = Device::new();
+    fs::create_dir_all(a.project_dir("app")).unwrap();
+    let dirty = a.session_line("app", 1).replace("msg 1", "token ghp_abcdefghijklmnopqrstuvwxyz0123456789");
+    a.write(&a.session_file("app", "leaky"), &dirty);
+    a.write(&a.session_file("app", "clean"), &a.session_line("app", 2));
+    let opts = Options { block_secrets: true, ..Options::default() };
+    let r = vault_core::sync::sync(&a.env, &store, &mut a.state, &opts, &|_| {}).unwrap();
+    assert_eq!(r.blocked.len(), 1, "{r:?}");
+    assert!(r.blocked[0].contains("leaky"));
+    let (ms, _) = store.read_all_manifests().unwrap();
+    assert!(ms[0].entries.keys().any(|k| k.ends_with("clean.jsonl")));
+    assert!(!ms[0].entries.keys().any(|k| k.ends_with("leaky.jsonl")));
+}
