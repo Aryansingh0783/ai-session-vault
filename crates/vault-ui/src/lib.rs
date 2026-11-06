@@ -270,7 +270,7 @@ impl App {
     fn host_ok(&self, rq: &Request) -> bool {
         let want = [format!("127.0.0.1:{}", self.port), format!("localhost:{}", self.port)];
         let host = rq.headers().iter().find(|h| h.field.equiv("Host")).map(|h| h.value.as_str().to_string()).unwrap_or_default();
-        if !want.iter().any(|w| *w == host) {
+        if !want.contains(&host) {
             return false;
         }
         match rq.headers().iter().find(|h| h.field.equiv("Origin")).map(|h| h.value.as_str().to_string()) {
@@ -398,7 +398,7 @@ impl App {
                     }))
                 }
                 (false, "/api/history") => ok_json(json!(self.shared.lock().unwrap().history)),
-                (false, "/api/doctor") => ok_json(json!(doctor::run_opts(&self.env, true, q.get("deep").map_or(false, |v| v == "1")))),
+                (false, "/api/doctor") => ok_json(json!(doctor::run_opts(&self.env, true, q.get("deep").is_some_and(|v| v == "1")))),
                 (false, "/api/devices") => {
                     let (ms, warns) = self.store.read_all_manifests()?;
                     let me = vault_core::env::State::load(&self.env).device_id;

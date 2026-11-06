@@ -1,0 +1,60 @@
+name: Release
+
+# Push a tag like v2.0.0 to build binaries and attach them to a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+            window: true
+          - os: macos-latest
+            name: macos-arm64
+            window: true
+          - os: ubuntu-latest
+            name: linux-x64
+            window: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux system libraries (keychain)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - name: Build
+        shell: bash
+        run: |
+          if [ "${{ matrix.window }}" = "true" ]; then
+            cargo build --release --workspace
+          else
+            cargo build --release -p vault-cli
+          fi
+      - name: Package
+        shell: bash
+        run: |
+          mkdir dist
+          ext=""; [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
+          cp "target/release/avault$ext" dist/
+          if [ "${{ matrix.window }}" = "true" ]; then cp "target/release/avault-window$ext" dist/; fi
+          cp README.md dist/ && cp docs/GUIDE.md dist/GUIDE.md
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            7z a "avault-${{ github.ref_name }}-${{ matrix.name }}.zip" ./dist/*
+          else
+            tar -czf "avault-${{ github.ref_name }}-${{ matrix.name }}.tar.gz" -C dist .
+          fi
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            avault-*.zip
+            avault-*.tar.gz
+          generate_release_notes: true

@@ -182,7 +182,7 @@ pub fn load_export(p: &Path) -> Result<Vec<Conversation>> {
                 raws.push(fs::read(e.path())?);
             }
         }
-    } else if p.extension().map_or(false, |e| e.eq_ignore_ascii_case("zip")) {
+    } else if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("zip")) {
         let mut z = zip::ZipArchive::new(fs::File::open(p)?)?;
         for i in 0..z.len() {
             let mut f = z.by_index(i)?;
@@ -255,7 +255,7 @@ pub fn load_all(env: &Env, with_sessions: bool) -> Vec<Conversation> {
     if with_sessions {
         let proot = env.claude_dir.join("projects");
         for e in walkdir::WalkDir::new(&proot).max_depth(2).into_iter().flatten() {
-            if e.file_type().is_file() && e.path().extension().map_or(false, |x| x == "jsonl") {
+            if e.file_type().is_file() && e.path().extension().is_some_and(|x| x == "jsonl") {
                 if let Some(c) = parse_cc_session(e.path()) {
                     out.push(c);
                 }
@@ -316,7 +316,7 @@ pub fn parse_cc_session(path: &Path) -> Option<Conversation> {
         return None;
     }
     let title: String = msgs.iter().find(|m| m.role == "user").map(|m| m.text.lines().next().unwrap_or("").chars().take(80).collect()).unwrap_or_default();
-    let updated = md.modified().ok().map(|t| OffsetDateTime::from(t)).map(|d| format!("{:04}-{:02}-{:02} {:02}:{:02}", d.year(), d.month() as u8, d.day(), d.hour(), d.minute())).unwrap_or_default();
+    let updated = md.modified().ok().map(OffsetDateTime::from).map(|d| format!("{:04}-{:02}-{:02} {:02}:{:02}", d.year(), d.month() as u8, d.day(), d.hour(), d.minute())).unwrap_or_default();
     Some(Conversation {
         id: path.file_stem()?.to_string_lossy().into_owned(),
         source: "claude-code".into(),
@@ -355,7 +355,7 @@ pub fn search(convs: Vec<Conversation>, query: &str, limit: usize) -> Vec<Hit> {
         let snippet = words.first().and_then(|w| {
             body.iter().enumerate().find_map(|(i, b)| b.find(w.as_str()).map(|pos| {
                 let t = &c.messages[i].text;
-                let start = t.char_indices().map(|(x, _)| x).filter(|x| *x + 60 >= pos).next().unwrap_or(0);
+                let start = t.char_indices().map(|(x, _)| x).find(|x| *x + 60 >= pos).unwrap_or(0);
                 t[start..].chars().take(140).collect::<String>().replace('\n', " ")
             }))
         }).unwrap_or_default();
@@ -476,7 +476,7 @@ pub fn list_sources(env: &Env) -> Vec<SourceFile> {
     let proot = env.claude_dir.join("projects");
     for e in walkdir::WalkDir::new(&proot).max_depth(2).into_iter().flatten() {
         let p = e.path();
-        if e.file_type().is_file() && p.extension().map_or(false, |x| x == "jsonl") {
+        if e.file_type().is_file() && p.extension().is_some_and(|x| x == "jsonl") {
             if let (Some(stem), Ok(md)) = (p.file_stem(), e.metadata()) {
                 out.push(SourceFile { path: p.to_path_buf(), source: "claude-code".into(), id: stem.to_string_lossy().into_owned(), mtime_ms: crate::util::mtime_ms(&md) });
             }
@@ -484,7 +484,7 @@ pub fn list_sources(env: &Env) -> Vec<SourceFile> {
     }
     for e in walkdir::WalkDir::new(archive_dir(env)).max_depth(2).into_iter().flatten() {
         let p = e.path();
-        if e.file_type().is_file() && p.extension().map_or(false, |x| x == "json") {
+        if e.file_type().is_file() && p.extension().is_some_and(|x| x == "json") {
             let source = p.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             if let (Some(stem), Ok(md)) = (p.file_stem(), e.metadata()) {
                 out.push(SourceFile { path: p.to_path_buf(), source, id: stem.to_string_lossy().into_owned(), mtime_ms: crate::util::mtime_ms(&md) });

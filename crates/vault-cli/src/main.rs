@@ -189,7 +189,7 @@ fn device_credential_path(env: &Env, vault_id: &str) -> PathBuf {
 }
 
 fn load_device_credential(env: &Env, vault_id: &str) -> Option<String> {
-    if let Some(e) = keyring::Entry::new("ai-session-vault-device", vault_id).ok() {
+    if let Ok(e) = keyring::Entry::new("ai-session-vault-device", vault_id) {
         if let Ok(p) = e.get_password() {
             return Some(p);
         }
@@ -219,7 +219,7 @@ fn open(cli: &Cli, env: &Env) -> Result<Store> {
         bail!("no vault in {} - if it is still syncing, wait for it to finish; otherwise run `avault init`", dir.display());
     }
     let vault_id = Store::read_header(&dir)?.vault_id;
-    let env_pw_set = std::env::var("AI_VAULT_PASSPHRASE").map_or(false, |p| !p.is_empty());
+    let env_pw_set = std::env::var("AI_VAULT_PASSPHRASE").is_ok_and(|p| !p.is_empty());
     let from_keyring = if env_pw_set { None } else { keyring_entry(&vault_id).and_then(|e| e.get_password().ok()) };
     if !env_pw_set && from_keyring.is_none() {
         if let Some(cred) = load_device_credential(env, &vault_id) {
@@ -299,7 +299,7 @@ fn to_clipboard(text: &str) -> bool {
     };
     for (c, args, data) in cmds {
         if let Ok(mut ch) = Command::new(c).args(args).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
-            if ch.stdin.take().map_or(false, |mut s| s.write_all(&data).is_ok()) && ch.wait().map_or(false, |s| s.success()) {
+            if ch.stdin.take().is_some_and(|mut s| s.write_all(&data).is_ok()) && ch.wait().is_ok_and(|s| s.success()) {
                 return true;
             }
         }
@@ -433,7 +433,7 @@ fn run() -> Result<()> {
             let inbox = env.state_dir.join("inbox");
             let list: Vec<PathBuf> = if paths.is_empty() {
                 std::fs::create_dir_all(&inbox)?;
-                std::fs::read_dir(&inbox)?.flatten().map(|e| e.path()).filter(|p| p.extension().map_or(false, |e| e == "zip" || e == "json") || p.is_dir()).collect()
+                std::fs::read_dir(&inbox)?.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "zip" || e == "json") || p.is_dir()).collect()
             } else {
                 paths.clone()
             };
@@ -621,7 +621,7 @@ fn run() -> Result<()> {
             let mut last_progress = 0usize;
             let mut logger = log_file.as_ref().map(|p| {
                 // Keep the unattended log from growing without bound.
-                if std::fs::metadata(p).map_or(false, |m| m.len() > 5 * 1024 * 1024) {
+                if std::fs::metadata(p).is_ok_and(|m| m.len() > 5 * 1024 * 1024) {
                     let _ = std::fs::remove_file(p);
                 }
                 std::fs::OpenOptions::new().create(true).append(true).open(p)

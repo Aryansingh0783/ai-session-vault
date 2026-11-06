@@ -8,7 +8,7 @@ use std::path::Path;
 use std::time::Duration;
 
 pub fn is_sqlite(p: &Path) -> bool {
-    p.extension().map_or(false, |e| e == "sqlite" || e == "sqlite3" || e == "db")
+    p.extension().is_some_and(|e| e == "sqlite" || e == "sqlite3" || e == "db")
 }
 
 /// Copy `src` into a new database file at `dst`.

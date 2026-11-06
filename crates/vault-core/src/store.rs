@@ -19,6 +19,8 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 /// Files are stored as fixed 1 MiB chunks, so a growing log only uploads its new tail.
+/// Unreferenced objects must be at least this old before `gc` removes them.
+pub const GC_GRACE: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
 pub const CHUNK: usize = 1024 * 1024;
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -204,7 +206,7 @@ impl Store {
         Ok(serde_json::from_slice(&fs::read(root.join("vault.json"))?)?)
     }
 
-    fn object_path(&self, id: &str) -> PathBuf {
+    pub fn object_path(&self, id: &str) -> PathBuf {
         self.root.join("objects").join(&id[..2]).join(id)
     }
 
@@ -350,7 +352,10 @@ impl Store {
     }
 
     /// Delete objects no manifest references. Returns (count, bytes).
+    /// Objects younger than `GC_GRACE` are kept: another device may be mid-upload, with its new
+    /// objects not yet listed in its manifest (manifests are checkpointed every 100 uploads).
     pub fn gc(&self, manifests: &[Manifest]) -> Result<(usize, u64)> {
+        let now = std::time::SystemTime::now();
         let live: std::collections::HashSet<&str> = manifests
             .iter()
             .flat_map(|m| m.entries.values().flat_map(|e| std::iter::once(e.hash.as_str()).chain(e.chunks.iter().map(|c| c.as_str()))))
@@ -369,6 +374,10 @@ impl Store {
                 let f = f?;
                 let name = f.file_name().to_string_lossy().into_owned();
                 if name.ends_with(".vaulttmp") || live.contains(name.as_str()) {
+                    continue;
+                }
+                let age = f.metadata().and_then(|m| m.modified()).ok().and_then(|t| now.duration_since(t).ok());
+                if age.is_none_or(|a| a < GC_GRACE) {
                     continue;
                 }
                 bytes += f.metadata().map(|m| m.len()).unwrap_or(0);
@@ -433,7 +442,7 @@ impl<'a> ChunkWriter<'a> {
         let chunk: Vec<u8> = self.buf.drain(..n).collect();
         let id = self.store.keys.object_id(&chunk);
         if !self.store.has_object(&id) {
-            self.store.put(&chunk).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            self.store.put(&chunk).map_err(|e| io::Error::other(e.to_string()))?;
             self.new_bytes += n as u64;
         }
         self.chunks.push(id);

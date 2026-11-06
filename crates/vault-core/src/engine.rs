@@ -342,7 +342,7 @@ fn run(env: Env, store: Arc<Store>, cfg: EngineConfig, rx: Receiver<Msg>, etx: S
         let now = Instant::now();
         let periodic = now.duration_since(last_full) >= core.cfg.full_sync_every;
         let quiet = now.duration_since(last_event) >= core.cfg.quiet;
-        let retry_due = retry_at.map_or(false, |r| now >= r);
+        let retry_due = retry_at.is_some_and(|r| now >= r);
         let due = retry_due || (quiet && (!dirty.is_empty() || need_full)) || periodic;
         if !due {
             continue;

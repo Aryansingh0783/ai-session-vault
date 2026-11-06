@@ -35,7 +35,7 @@ pub fn import_v1(store: &Store, v1_data: &Path) -> Result<ImportReport> {
     let add = |m: &mut crate::store::Manifest, logical: String, path: &Path, rep: &mut ImportReport| -> Result<()> {
         let data = fs::read(path)?;
         let id = store.put(&data)?;
-        let kind = if path.extension().map_or(false, |e| e == "jsonl") { Kind::Log } else { Kind::File };
+        let kind = if path.extension().is_some_and(|e| e == "jsonl") { Kind::Log } else { Kind::File };
         let mt = fs::metadata(path).map(|x| mtime_ms(&x)).unwrap_or(0);
         m.entries.insert(logical, Entry { kind, size: data.len() as u64, mtime_ms: mt, hash: id, chunks: vec![] });
         rep.files += 1;

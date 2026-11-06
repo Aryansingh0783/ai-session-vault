@@ -63,6 +63,10 @@
 :root[data-theme="dark"] .ids-toast { background: #f1f1f1; color: #161616; }
 :root[data-theme="dark"] { --id-sub: #b5b5b5; }
 :root[data-theme="dark"] .ids-check.is-checked { color: var(--id-on-ink); }
+:root[data-theme="dark"] .hit__snip { color: #a5a5a5; }
+:root[data-theme="dark"] .hit.is-active .hit__snip { color: #444; }
+:root[data-theme="dark"] .hit.is-active .hit__top { color: #555; }
+:root[data-theme="dark"] .mini span { color: #555; }
 :root[data-theme="dark"] ::selection { background: #f1f1f1; color: #161616; }
 
 /* ---------- theme picker (Settings) ---------- */
@@ -74,3 +78,7 @@
 .theme__name small { display: block; font-weight: 400; font-size: 11px; color: var(--id-muted); }
 .theme.is-active .theme__sw { box-shadow: 0 0 0 2px var(--id-ink); }
 .theme:focus-visible .theme__sw { box-shadow: 0 0 0 2px var(--id-ink), 0 0 0 5px var(--id-line-strong); }
+
+/* link on the stage (outside any card): needs to read on the photo in every theme */
+.section-head a { color: var(--id-ink); opacity: 0.75; }
+.section-head a:hover { opacity: 1; }

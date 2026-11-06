@@ -477,3 +477,22 @@ fn a_device_can_join_with_a_one_time_code_and_be_revoked() {
     std::thread::sleep(std::time::Duration::from_millis(20));
     assert!(Store::join(vault.path(), &stale, "late").err().unwrap().to_string().contains("expired"));
 }
+
+#[test]
+fn gc_keeps_fresh_unreferenced_objects_and_removes_old_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    let vault = dir.path().join("vault");
+    let (store, _rec) = Store::init(&vault, PASS, fast()).unwrap();
+    // An object no manifest lists, like another device's in-flight upload.
+    let id = store.put(b"in flight").unwrap();
+    let (ms, warns) = store.read_all_manifests().unwrap();
+    assert!(warns.is_empty());
+    assert_eq!(store.gc(&ms).unwrap().0, 0, "a fresh object must survive gc");
+    assert!(store.get(&id).is_ok());
+    // Once it is older than the grace period it is garbage.
+    let path = store.object_path(&id);
+    let old = std::time::SystemTime::now() - vault_core::store::GC_GRACE - std::time::Duration::from_secs(60);
+    fs::File::options().write(true).open(&path).unwrap().set_modified(old).unwrap();
+    assert_eq!(store.gc(&ms).unwrap().0, 1);
+    assert!(store.get(&id).is_err());
+}

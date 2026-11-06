@@ -3452,7 +3452,7 @@ checksum = "3a3b425286980a367278453f3b6d28cdcb134b574e5a35824a6ff5eebad50bb6"
 
 [[package]]
 name = "vault-cli"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3467,7 +3467,7 @@ dependencies = [
 
 [[package]]
 name = "vault-core"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "argon2",
@@ -3497,7 +3497,7 @@ dependencies = [
 
 [[package]]
 name = "vault-ui"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "hex",
@@ -3514,7 +3514,7 @@ dependencies = [
 
 [[package]]
 name = "vault-window"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "tao",

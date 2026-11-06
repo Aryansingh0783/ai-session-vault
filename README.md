@@ -5,13 +5,17 @@ encrypted, and a plain file-sync tool (OneDrive, Google Drive, Dropbox, Syncthin
 
 New here? Read the [guide](docs/GUIDE.md): what it does, a 5-minute start, how to read the app, tips and troubleshooting.
 
-Status: **core, CLI and app UI working** (`avault`, `avault ui`), 37 automated tests.
+Status: **core, CLI and app UI working** (`avault`, `avault ui`), 38 automated tests.
 
 ```
 crates/vault-core   library: crypto, vault store, sync engine, archive/search, doctor (no UI)
 crates/vault-cli    `avault` command line, with --json output
 crates/vault-ui     the app: a local web UI (iDraft-style design) served by the Rust core, over the live engine
 ```
+
+## Install
+
+Download the zip/tarball for your system from the [Releases page](https://github.com/Aryansingh0783/ai-session-vault/releases), unpack it anywhere and run `avault` from a terminal (`avault-window` and `WebView2Loader.dll`, where present, must stay next to it for `avault app`). Or build it yourself: `cargo build --release`.
 
 ## Quick start
 

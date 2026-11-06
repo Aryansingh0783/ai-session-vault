@@ -86,7 +86,7 @@ pub fn overview(env: &Env, store: &Store, maps: &[PathMap]) -> Result<Overview> 
             let local = if portable.starts_with("raw:") { None } else { Some(to_local(&portable, &env.home, maps)) };
             let p = projects.entry(key.to_string()).or_insert_with(|| ProjectView {
                 key: key.to_string(),
-                exists_locally: local.as_deref().map_or(false, |l| Path::new(l).is_dir()),
+                exists_locally: local.as_deref().is_some_and(|l| Path::new(l).is_dir()),
                 local_path: local,
                 portable_path: portable,
                 sessions: 0,

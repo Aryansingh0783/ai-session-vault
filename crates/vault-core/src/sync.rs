@@ -8,7 +8,7 @@
 //! * Every write is atomic (temp file + rename). Partial trailing lines of live logs are never shipped.
 //! * Project folders are matched by portable path, so `C:\Users\a\app` and `/home/a/app` line up.
 
-use crate::env::{running_tools, wildcard, Env, FileState, State};
+use crate::env::{running_tools, wildcard, Env, State};
 use crate::jsonl::{self, Relation};
 use crate::paths::{encode_project, project_key, to_local, to_portable, PathMap};
 use crate::store::{ChunkWriter, Entry, HashWriter, Kind, Store};
@@ -83,7 +83,7 @@ pub struct Hooks {
 
 impl Hooks {
     pub fn cancelled(&self) -> bool {
-        self.cancel.as_ref().map_or(false, |c| c.load(Ordering::Relaxed))
+        self.cancel.as_ref().is_some_and(|c| c.load(Ordering::Relaxed))
     }
     pub fn progress(&self, phase: &str, done: usize, total: usize) {
         if let Some(p) = &self.progress {
@@ -162,7 +162,7 @@ struct Item {
 }
 
 fn kind_of(p: &Path) -> Kind {
-    if p.extension().map_or(false, |e| e == "jsonl") { Kind::Log } else { Kind::File }
+    if p.extension().is_some_and(|e| e == "jsonl") { Kind::Log } else { Kind::File }
 }
 
 fn rel_posix(base: &Path, p: &Path) -> String {
@@ -213,7 +213,7 @@ fn expand_items(base: &Path, names: &[&str]) -> Vec<PathBuf> {
 /// Find a Claude Code project's working directory from its logs (prefer the one matching the dir name).
 fn detect_cwd(pdir: &Path) -> Option<String> {
     use std::io::{BufRead, BufReader};
-    let mut files: Vec<_> = fs::read_dir(pdir).ok()?.flatten().map(|e| e.path()).filter(|p| p.extension().map_or(false, |e| e == "jsonl")).collect();
+    let mut files: Vec<_> = fs::read_dir(pdir).ok()?.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "jsonl")).collect();
     files.sort_by_key(|p| std::cmp::Reverse(fs::metadata(p).map(|m| mtime_ms(&m)).unwrap_or(0)));
     let name = pdir.file_name()?.to_string_lossy().into_owned();
     let mut seen: BTreeMap<String, usize> = BTreeMap::new();
@@ -346,7 +346,7 @@ fn local_path_for(env: &Env, logical: &str, projects: &BTreeMap<String, String>,
 }
 
 fn sqlite_busy(p: &Path) -> bool {
-    if !p.extension().map_or(false, |e| e == "sqlite") {
+    if !p.extension().is_some_and(|e| e == "sqlite") {
         return false;
     }
     let mut w = p.as_os_str().to_owned();
@@ -419,7 +419,7 @@ fn prepare_mem(item: &Item, env: &Env, redact: bool) -> Result<Option<Vec<u8>>> 
 /// Small prose/config files (CLAUDE.md, memory notes, rules, TOML) are merged line by line when two
 /// devices edit different parts. Everything else falls back to newest-wins.
 fn mergeable(p: &Path) -> bool {
-    p.extension().map_or(false, |e| matches!(e.to_str(), Some("md") | Some("txt") | Some("toml")))
+    p.extension().is_some_and(|e| matches!(e.to_str(), Some("md") | Some("txt") | Some("toml")))
 }
 
 const BASE_MAX: u64 = 256 * 1024;
@@ -573,7 +573,7 @@ fn file_has_secrets(path: &Path) -> bool {
     let Ok(f) = fs::File::open(path) else { return false };
     let mut r = BufReader::with_capacity(256 * 1024, f);
     let mut line = Vec::new();
-    while r.read_until(b'\n', &mut line).map_or(false, |n| n > 0) {
+    while r.read_until(b'\n', &mut line).is_ok_and(|n| n > 0) {
         if crate::secrets::count(&line) > 0 {
             return true;
         }
@@ -809,7 +809,7 @@ fn local_hash_of(item: &Item, env: &Env, store: &Store, state: &mut State, redac
         return None;
     }
     let (id, _) = hw.finish();
-    let e = state.files.entry(item.logical.clone()).or_insert_with(FileState::default);
+    let e = state.files.entry(item.logical.clone()).or_default();
     e.size = size;
     e.mtime_ms = mt;
     e.local_hash = id.clone();
@@ -834,7 +834,7 @@ pub fn restore(env: &Env, store: &Store, state: &mut State, opts: &Options, log:
     for m in &manifests {
         projects.extend(m.projects.clone());
         for (l, e) in &m.entries {
-            if Component::of(l).map_or(false, |c| opts.components.contains(&c)) {
+            if Component::of(l).is_some_and(|c| opts.components.contains(&c)) {
                 cands.entry(l.clone()).or_default().push((m.device.id.as_str(), e));
             }
         }
@@ -910,7 +910,7 @@ fn restore_log(env: &Env, store: &Store, state: &mut State, item: &Item, entries
             distinct.push(e);
         }
     }
-    if local_hash.is_some() && distinct.iter().all(|e| Some(e.hash.as_str()) == local_hash || seen.iter().any(|s| *s == e.hash)) {
+    if local_hash.is_some() && distinct.iter().all(|e| Some(e.hash.as_str()) == local_hash || seen.contains(&e.hash)) {
         rep.unchanged += 1;
         return Ok(());
     }
