@@ -172,12 +172,20 @@ fn start_watchers(env: &Env, store: &Store, tx: &Sender<Msg>) -> Vec<Recommended
         let tx = tx.clone();
         let skip = own_state.clone();
         let devices = vault_devices.clone();
+        // Some platforms (macOS FSEvents) report real paths, so a watched folder behind a symlink
+        // (/var -> /private/var) comes back with a different prefix. Map events back to the path we were given.
+        let given = root.to_path_buf();
+        let real = std::fs::canonicalize(root).unwrap_or_else(|_| given.clone());
         let w = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
             let Ok(ev) = res else { return };
             if matches!(ev.kind, EventKind::Access(_)) {
                 return;
             }
             for p in ev.paths {
+                let p = match p.strip_prefix(&real) {
+                    Ok(rest) if real != given => given.join(rest),
+                    _ => p,
+                };
                 let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 if name.ends_with(".vaulttmp") {
                     continue;

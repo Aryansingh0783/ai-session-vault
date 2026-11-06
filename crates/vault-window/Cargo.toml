@@ -15,3 +15,4 @@ wry = "0.50"
 tao = "0.32"
 tray-icon = { version = "0.19", default-features = false }
 ureq = { version = "2", features = ["json"] }
+png = "0.17"

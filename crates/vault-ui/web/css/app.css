@@ -32,7 +32,7 @@ h1, h2, h3, p { margin: 0; }
   padding: 22px 16px 18px; display: flex; flex-direction: column; min-height: 0; overflow: auto;
 }
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 22px; }
-.brand__mark { width: 30px; height: 30px; color: var(--id-ink); }
+.brand__mark { width: 30px; height: 30px; object-fit: contain; border-radius: 8px; }
 .brand__name { font-size: 22px; font-weight: 700; letter-spacing: -0.03em; }
 .side-nav { gap: 4px; }
 .ids-nav__item { height: 38px; gap: 12px; padding: 0 14px; font-size: 14px; }

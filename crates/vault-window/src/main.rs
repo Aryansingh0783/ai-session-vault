@@ -12,23 +12,28 @@ use tao::window::WindowBuilder;
 use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
-/// 32x32 mark: dark rounded square with a white ring, matching the app logo.
+const LOGO_PNG: &[u8] = include_bytes!("../../../assets/logo-64.png");
+
+/// The project logo (assets/icon.ico from the repo), decoded to RGBA.
+fn logo() -> (Vec<u8>, u32, u32) {
+    let mut dec = png::Decoder::new(LOGO_PNG);
+    dec.set_transformations(png::Transformations::EXPAND);
+    let mut r = dec.read_info().expect("logo png");
+    let mut buf = vec![0; r.output_buffer_size()];
+    let info = r.next_frame(&mut buf).expect("logo frame");
+    buf.truncate(info.buffer_size());
+    let rgba = match info.color_type {
+        png::ColorType::Rgba => buf,
+        png::ColorType::Rgb => buf.chunks(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
+        png::ColorType::GrayscaleAlpha => buf.chunks(2).flat_map(|p| [p[0], p[0], p[0], p[1]]).collect(),
+        _ => buf.iter().flat_map(|g| [*g, *g, *g, 255]).collect(),
+    };
+    (rgba, info.width, info.height)
+}
+
 fn icon() -> Icon {
-    const N: u32 = 32;
-    let mut px = Vec::with_capacity((N * N * 4) as usize);
-    let c = (N as f32 - 1.0) / 2.0;
-    for y in 0..N {
-        for x in 0..N {
-            let (dx, dy) = (x as f32 - c, y as f32 - c);
-            let d = (dx * dx + dy * dy).sqrt();
-            let (ax, ay) = (dx.abs() - 9.0, dy.abs() - 9.0);
-            let inside = ax.max(0.0).hypot(ay.max(0.0)) + ax.max(ay).min(0.0) <= 6.5;
-            let ring = (d - 7.0).abs() <= 1.6 || d <= 2.4;
-            let (v, a) = if !inside { (0, 0) } else if ring { (255, 255) } else { (22, 255) };
-            px.extend_from_slice(&[v, v, v, a]);
-        }
-    }
-    Icon::from_rgba(px, N, N).expect("valid icon")
+    let (px, w, h) = logo();
+    Icon::from_rgba(px, w, h).expect("valid icon")
 }
 
 /// Fire-and-forget POST to the local UI server (the same API the page uses).
@@ -50,6 +55,10 @@ fn main() -> Result<()> {
     let event_loop = EventLoopBuilder::<()>::new().build();
     let window = WindowBuilder::new()
         .with_title("Vault")
+        .with_window_icon({
+            let (px, w, h) = logo();
+            tao::window::Icon::from_rgba(px, w, h).ok()
+        })
         .with_inner_size(LogicalSize::new(1360.0, 860.0))
         .with_min_inner_size(LogicalSize::new(900.0, 640.0))
         .build(&event_loop)

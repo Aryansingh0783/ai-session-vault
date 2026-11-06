@@ -1,4 +1,6 @@
-# AI Session Vault (Rust rewrite)
+<p align="center"><img src="assets/hero.png" alt="AI Session Vault: carry your Claude and ChatGPT session history and context between devices" width="860"></p>
+
+# AI Session Vault
 
 Carry your Claude Code, Codex and Claude Desktop sessions between computers. Everything in the vault is
 encrypted, and a plain file-sync tool (OneDrive, Google Drive, Dropbox, Syncthing, a USB stick) can't corrupt it.
