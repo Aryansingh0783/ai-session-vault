@@ -1,0 +1,17 @@
+[package]
+name = "vault-window"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Native window and tray icon for AI Session Vault (shows the local web UI in the system webview)"
+
+[[bin]]
+name = "avault-window"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+wry = "0.50"
+tao = "0.32"
+tray-icon = { version = "0.19", default-features = false }
+ureq = { version = "2", features = ["json"] }

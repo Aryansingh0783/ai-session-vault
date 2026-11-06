@@ -14,6 +14,7 @@ crates/vault-ui     the app: a local web UI (iDraft-style design) served by the 
 ## Quick start
 
 ```
+avault app                                     # the app in its own window, with a tray icon
 avault ui                                      # open the app (Dashboard, Projects, Devices, Archive, Health, Settings)
 avault init --vault "D:\OneDrive\AI Vault"     # once; prints a recovery key - keep it
 avault sync                                    # on every device: pulls others' changes, then publishes yours
@@ -57,6 +58,8 @@ avault context "rust lifetimes" --pick 1       # paste-ready context pack for a 
 ## The app (`avault ui`)
 A local web app in the iDraft design language (glass shell, white sidebar, dark cards, pill buttons; loaders from the loader sheet), served by the Rust core on `127.0.0.1` with a per-run access token and Host/Origin checks. It shows the vault overview, a 7-day sync activity chart, storage savings, health checks, live engine status (progress over server-sent events), projects, devices (add a device with a one-time code, revoke access), a search/reader for every session with "copy as context pack", integrity checks, and settings (project exclusions). `avault ui --read-only` shows the vault without running the sync engine.
 
+**Native window + tray (`avault app`).** Starts the engine and UI, then opens them in the system webview (WebView2 on Windows) through the small `avault-window` program that ships next to `avault` (on Windows it also needs `WebView2Loader.dll` beside it; the build copies it). Closing the window hides it to the tray and syncing continues; the tray menu has Open, Sync now, Pause, Resume and Quit. If `avault-window` is missing, `avault app` falls back to the browser window.
+
 ## How the vault works
 
 ```
@@ -80,9 +83,8 @@ Done: autostart at login, device enrollment with revocable access (`enroll` / `j
 partial-line guard, MSIX desktop path, secret scan in `doctor`, retention warning.
 
 Next:
-1. Wrap the app in a native window (Tauri/WebView2) and add a tray icon; the UI already runs as a local app window (`avault ui` opens Edge/Chrome `--app`).
 2. Streaming merge for logs over 2 GiB (smaller logs merge in memory; larger ones are skipped and reported). Content-defined chunking if edits-in-the-middle ever matter.
-4. A tray icon / real Windows service wrapper (autostart at login already exists: `avault autostart enable`).
+4. A real Windows service wrapper (autostart at login already exists: `avault autostart enable`). Tray status badges for conflicts and errors.
 6. Per-OS layers for `settings.json` (key-level merge and per-machine keys already exist).
 7. Full key rotation (re-encrypt) so a revoked device that already copied the key is locked out too.
 8. Full-text index (tantivy) and neutral session schema for Codex rollouts.
