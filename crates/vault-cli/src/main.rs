@@ -17,6 +17,9 @@ struct Cli {
     /// Vault folder (remembered after `init`). Can also be set with AI_VAULT_DIR.
     #[arg(long, global = true, env = "AI_VAULT_DIR")]
     vault: Option<PathBuf>,
+    /// Use this folder as the home directory (testing and demos; never touches your real one).
+    #[arg(long, global = true, hide = true)]
+    home: Option<PathBuf>,
     /// Machine-readable output (for the desktop app and scripts).
     #[arg(long, global = true)]
     json: bool,
@@ -134,6 +137,20 @@ enum Cmd {
         /// Append events (JSON lines) to this file instead of printing; for unattended runs.
         #[arg(long)]
         log: Option<PathBuf>,
+    },
+    /// Open the app: a local web UI over the sync engine (read the link it prints; it carries a one-time token).
+    Ui {
+        #[command(flatten)]
+        args: SyncArgs,
+        /// Port to listen on (127.0.0.1 only). 0 = pick a free one.
+        #[arg(long, default_value_t = 0)]
+        port: u16,
+        /// Don't open a window; just print the link.
+        #[arg(long)]
+        no_open: bool,
+        /// Show the vault without running the sync engine (nothing is uploaded or restored).
+        #[arg(long)]
+        read_only: bool,
     },
     /// Start the engine automatically at login (Windows scheduled task / macOS launchd / Linux systemd user unit).
     Autostart {
@@ -305,6 +322,28 @@ fn new_passphrase() -> Result<String> {
     }
 }
 
+/// Open the UI as an app-style window (Edge/Chrome `--app`) when available, else the default browser.
+fn open_app_window(url: &str) {
+    use std::process::Command;
+    if cfg!(windows) {
+        let candidates = [
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        ];
+        for c in candidates {
+            if std::path::Path::new(c).exists() && Command::new(c).arg(format!("--app={url}")).spawn().is_ok() {
+                return;
+            }
+        }
+        let _ = Command::new("cmd").args(["/C", "start", "", url]).spawn();
+    } else if cfg!(target_os = "macos") {
+        let _ = Command::new("open").arg(url).spawn();
+    } else {
+        let _ = Command::new("xdg-open").arg(url).spawn();
+    }
+}
+
 fn gethostname_string() -> String {
     std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).unwrap_or_else(|_| "this device".into())
 }
@@ -318,7 +357,7 @@ fn main() {
 
 fn run() -> Result<()> {
     let cli = Cli::parse();
-    let env = Env::detect(None)?;
+    let env = Env::detect(cli.home.as_deref())?;
     let log = |m: &str| println!("{m}");
     match &cli.cmd {
         Cmd::Init => {
@@ -483,6 +522,21 @@ fn run() -> Result<()> {
             println!("Imported {} file(s) from {} project(s). Run `avault sync` to distribute them.", r.files, r.projects);
             println!("Not imported (v1 encrypted fields inside them): {}. Sync those fresh from the device that has them.", r.skipped.join(", "));
         }
+        Cmd::Ui { args, port, no_open, read_only } => {
+            let store = std::sync::Arc::new(open(&cli, &env)?);
+            let o = options(args)?;
+            let engine = (!*read_only).then(|| vault_core::engine::EngineConfig { components: o.components, maps: o.maps, redact: o.redact, block_secrets: o.block_secrets, ..Default::default() });
+            let ui = vault_ui::Ui::start(env.clone(), store, vault_ui::UiOptions { port: *port, engine })?;
+            println!("AI Session Vault is running at:
+
+    {}
+
+(Keep this window open. Ctrl+C quits.)", ui.url);
+            if !*no_open {
+                open_app_window(&ui.url);
+            }
+            ui.wait();
+        }
         Cmd::Autostart { action, print } => {
             use autostart::Action;
             let act = match action.as_str() {
@@ -516,7 +570,7 @@ fn run() -> Result<()> {
                 full_sync_every: std::time::Duration::from_secs(*full_every),
                 watch: !*no_watch,
             };
-            let engine = Engine::start(env.clone(), store, cfg)?;
+            let engine = Engine::start(env.clone(), std::sync::Arc::new(store), cfg)?;
             if !cli.json {
                 println!("Engine running (Ctrl+C to stop). Syncs {}s after a session goes quiet.", quiet);
             }

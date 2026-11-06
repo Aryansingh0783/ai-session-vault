@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Session Vault</title>
+<link rel="stylesheet" href="css/idraft-tokens.css">
+<link rel="stylesheet" href="css/idraft-kit.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body class="ids">
+<!-- ============ icon sprite ============ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-share" viewBox="0 0 16 16">
+      <circle cx="3.4" cy="8" r="1.7"/><circle cx="12.4" cy="3.2" r="1.7"/><circle cx="12.4" cy="12.8" r="1.7"/>
+      <path d="M5 7.2 10.8 4M5 8.8l5.8 3.2"/>
+    </symbol>
+    <symbol id="i-dots" viewBox="0 0 16 16">
+      <circle cx="8" cy="3" r="1.15" fill="currentColor" stroke="none"/>
+      <circle cx="8" cy="8" r="1.15" fill="currentColor" stroke="none"/>
+      <circle cx="8" cy="13" r="1.15" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-dots-h" viewBox="0 0 16 16">
+      <circle cx="3" cy="8" r="1.1" fill="currentColor" stroke="none"/>
+      <circle cx="8" cy="8" r="1.1" fill="currentColor" stroke="none"/>
+      <circle cx="13" cy="8" r="1.1" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.2"/><path d="m10.2 10.2 3.3 3.3"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 16 16">
+      <path d="M3.9 11.3h8.2l-1.1-1.7V7.1a3 3 0 0 0-6 0v2.5l-1.1 1.7Z"/>
+      <path d="M6.6 13.1a1.4 1.4 0 0 0 2.8 0"/>
+    </symbol>
+    <symbol id="i-bell-dot" viewBox="0 0 16 16">
+      <path d="M3.9 11.3h8.2l-1.1-1.7V7.1a3 3 0 0 0-6 0v2.5l-1.1 1.7Z"/>
+      <path d="M6.6 13.1a1.4 1.4 0 0 0 2.8 0"/>
+      <circle cx="12.4" cy="3.4" r="2.3" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-dashboard" viewBox="0 0 16 16">
+      <rect x="2.2" y="2.2" width="5" height="5" rx="1"/>
+      <rect x="8.8" y="2.2" width="5" height="5" rx="1"/>
+      <rect x="2.2" y="8.8" width="5" height="5" rx="1"/>
+      <rect x="8.8" y="8.8" width="5" height="5" rx="1"/>
+    </symbol>
+    <symbol id="i-calendar" viewBox="0 0 16 16">
+      <rect x="2.4" y="3.4" width="11.2" height="10.2" rx="1.6"/>
+      <path d="M2.4 6.4h11.2M5.3 2.2v2.6M10.7 2.2v2.6"/>
+      <path d="M5.2 9.1h1M7.5 9.1h1M9.8 9.1h1M5.2 11.2h1M7.5 11.2h1" stroke-width="1.3"/>
+    </symbol>
+    <symbol id="i-tasks" viewBox="0 0 16 16">
+      <rect x="2.3" y="2.3" width="11.4" height="11.4" rx="2"/>
+      <path d="m4.9 8 2 2 4.2-4.4"/>
+    </symbol>
+    <symbol id="i-stats" viewBox="0 0 16 16">
+      <path d="M2.3 13.4V2.6M2.3 13.4h11.4"/>
+      <path d="m4.5 10.7 3-3.2 2.2 2.1 4-4.6"/>
+    </symbol>
+    <symbol id="i-docs" viewBox="0 0 16 16">
+      <path d="M2.4 5.2A1.6 1.6 0 0 1 4 3.6h2.9l1.5 1.6H12a1.6 1.6 0 0 1 1.6 1.6v5.4A1.6 1.6 0 0 1 12 13.8H4a1.6 1.6 0 0 1-1.6-1.6V5.2Z"/>
+    </symbol>
+    <symbol id="i-slack" viewBox="0 0 16 16">
+      <rect x="2.2" y="6.5" width="4.2" height="2.2" rx="1.1"/>
+      <rect x="9.6" y="7.3" width="4.2" height="2.2" rx="1.1"/>
+      <rect x="6.5" y="2.2" width="2.2" height="4.2" rx="1.1"/>
+      <rect x="7.3" y="9.6" width="2.2" height="4.2" rx="1.1"/>
+      <circle cx="4.3" cy="4.3" r="1.1" fill="currentColor" stroke="none"/>
+      <circle cx="11.7" cy="11.7" r="1.1" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-notion" viewBox="0 0 16 16">
+      <rect x="2.3" y="2.3" width="11.4" height="11.4" rx="1.6"/>
+      <path d="M5.2 11.4V4.9l5.5 6.2V4.9"/>
+    </symbol>
+    <symbol id="i-plugin" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="6" stroke-dasharray="2.2 2.1"/>
+      <path d="M8 5.3v5.4M5.3 8h5.4"/>
+    </symbol>
+    <symbol id="i-settings" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="2.2"/>
+      <path d="M8 2.1v1.5M8 12.4v1.5M2.1 8h1.5M12.4 8h1.5M3.8 3.8l1.1 1.1M11.1 11.1l1.1 1.1M12.2 3.8l-1.1 1.1M4.9 11.1l-1.1 1.1"/>
+    </symbol>
+    <symbol id="i-pencil" viewBox="0 0 16 16">
+      <path d="m3 13 .7-2.9 7.2-7.2a1.4 1.4 0 0 1 2 2l-7.2 7.2L3 13Z"/>
+      <path d="m10.1 3.8 2.1 2.1"/>
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="m3.4 8.4 3 3 6.2-6.8"/></symbol>
+    <symbol id="i-chev-r" viewBox="0 0 16 16"><path d="m6 3.5 4.5 4.5L6 12.5"/></symbol>
+    <symbol id="i-chev-d" viewBox="0 0 16 16"><path d="m3.5 6 4.5 4.5L12.5 6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2.2v7.6M4.9 7l3.1 3.1L11.1 7M2.8 13.4h10.4"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 16 16">
+      <rect x="2.2" y="2.2" width="5" height="5" rx="0.8"/><rect x="8.8" y="2.2" width="5" height="5" rx="0.8"/>
+      <rect x="2.2" y="8.8" width="5" height="5" rx="0.8"/><rect x="8.8" y="8.8" width="5" height="5" rx="0.8"/>
+    </symbol>
+    <symbol id="i-list" viewBox="0 0 16 16">
+      <path d="M5.5 3.4h8M5.5 8h8M5.5 12.6h8"/>
+      <rect x="2" y="2.4" width="2" height="2" rx="0.4" fill="currentColor" stroke="none"/>
+      <rect x="2" y="7" width="2" height="2" rx="0.4" fill="currentColor" stroke="none"/>
+      <rect x="2" y="11.6" width="2" height="2" rx="0.4" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-gift" viewBox="0 0 16 16">
+      <path d="M2.6 7.3h10.8v5.9a1 1 0 0 1-1 1H3.6a1 1 0 0 1-1-1V7.3Z"/>
+      <path d="M2.2 4.9h11.6v2.4H2.2zM8 4.9v9.3"/>
+      <path d="M8 4.9C6.9 4.9 5 4.6 5 3.4c0-1 .8-1.4 1.5-1.2C7.7 2.5 8 4.9 8 4.9ZM8 4.9c1.1 0 3-.3 3-1.5 0-1-.8-1.4-1.5-1.2C8.3 2.5 8 4.9 8 4.9Z"/>
+    </symbol>
+    <symbol id="i-medical" viewBox="0 0 16 16">
+      <path d="M6.4 2.3h3.2v4.1h4.1v3.2h-4.1v4.1H6.4v-4.1H2.3V6.4h4.1V2.3Z"/>
+    </symbol>
+    <symbol id="i-wave" viewBox="0 0 16 16">
+      <path d="m2 11.4 3.2-4 2.5 2.3L13.4 3"/>
+      <circle cx="13.4" cy="3" r="1.4" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-bars" viewBox="0 0 16 16">
+      <path d="M2.4 13.4V2.6M2.4 13.4h11.2"/>
+      <path d="M5 10.7V8.2M8 10.7V5.4M11 10.7V6.8"/>
+      <path d="m5.2 5.7 3.2-2 3.6 1.4" stroke-width="1.2"/>
+    </symbol>
+    <symbol id="i-target" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="5.6"/><circle cx="8" cy="8" r="3.2"/><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-dashed-ring" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="5.6" stroke-dasharray="1.9 1.7"/><circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-spiral" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="5.7"/><circle cx="8" cy="8" r="4.2"/><circle cx="8" cy="8" r="2.7"/><circle cx="8" cy="8" r="1.1" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-trash" viewBox="0 0 16 16">
+      <path d="M2.9 4.3h10.2M6.1 4.3V2.7h3.8v1.6"/>
+      <path d="m4.1 4.3.7 8.6a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.7-8.6"/>
+      <path d="M6.6 6.8v3.9M9.4 6.8v3.9"/>
+    </symbol>
+    <symbol id="i-pin" viewBox="0 0 16 16">
+      <path d="M9.2 2.5 13.5 6.8l-2.2.4-2.9 2.9.4 2.2-1.4 1.4-4.1-4.1 1.4-1.4 2.2.4L9.8 5.7l-.6-3.2Z"/>
+      <path d="m6.4 9.6-3.5 3.5"/>
+    </symbol>
+  </defs>
+</svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-laptop" viewBox="0 0 16 16"><rect x="3" y="3.2" width="10" height="7" rx="1.2"/><path d="M1.6 12.6h12.8"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3.2" y="7" width="9.6" height="6.6" rx="1.6"/><path d="M5.4 7V5.2a2.6 2.6 0 0 1 5.2 0V7"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.4" y="5.4" width="8" height="8" rx="1.6"/><path d="M10.6 5.4V4a1.4 1.4 0 0 0-1.4-1.4H4A1.4 1.4 0 0 0 2.6 4v5.2A1.4 1.4 0 0 0 4 10.6h1.4"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="m3.6 3.6 8.8 8.8M12.4 3.6l-8.8 8.8"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13.2 8A5.2 5.2 0 1 1 11.7 4.3"/><path d="M13.4 2.4v3h-3"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 16 16"><path d="M5.6 3.6v8.8M10.4 3.6v8.8"/></symbol>
+  <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.2v9.6l7.6-4.8L5 3.2Z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 2 3 3.8v3.9c0 3 2 5.2 5 6.3 3-1.1 5-3.3 5-6.3V3.8L8 2Z"/><path d="m5.9 8 1.6 1.6 2.7-3"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 16 16"><rect x="2.2" y="3" width="11.6" height="3" rx="1"/><path d="M3.2 6v6a1 1 0 0 0 1 1h7.6a1 1 0 0 0 1-1V6M6.4 9h3.2"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="m5 6.6 2 1.6-2 1.6M8.6 10h2.6"/></symbol>
+  <symbol id="i-code" viewBox="0 0 16 16"><path d="m5.6 4.4-3.2 3.6 3.2 3.6M10.4 4.4l3.2 3.6-3.2 3.6"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 16 16"><rect x="2" y="2.8" width="12" height="8" rx="1.4"/><path d="M6 13.4h4M8 10.8v2.6"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.6 14 13H2L8 2.6Z"/><path d="M8 6.8v2.9M8 11.6v.1"/></symbol>
+  <symbol id="i-vault" viewBox="0 0 32 32"><rect x="3" y="3" width="26" height="26" rx="8" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="7" fill="none" stroke="#fff" stroke-width="2"/><circle cx="16" cy="16" r="2.2" fill="#fff" stroke="none"/><path d="M16 9V6.6M16 25.4V23M9 16H6.6M25.4 16H23" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/></symbol>
+</defs></svg>
+
+<div class="stage" aria-hidden="true"></div>
+
+<div class="shell">
+  <aside class="sidebar" aria-label="Main navigation">
+    <a class="brand" href="#/dashboard" aria-label="AI Session Vault">
+      <svg class="brand__mark"><use href="#i-vault"/></svg>
+      <span class="brand__name">Vault</span>
+    </a>
+
+    <nav class="ids-nav side-nav" aria-label="Primary">
+      <a class="ids-nav__item" href="#/dashboard" data-route="dashboard"><svg class="ids-icon"><use href="#i-dashboard"/></svg><span>Dashboard</span></a>
+      <a class="ids-nav__item" href="#/projects" data-route="projects"><svg class="ids-icon"><use href="#i-docs"/></svg><span>Projects</span></a>
+      <a class="ids-nav__item" href="#/devices" data-route="devices"><svg class="ids-icon"><use href="#i-laptop"/></svg><span>Devices</span></a>
+      <a class="ids-nav__item" href="#/archive" data-route="archive"><svg class="ids-icon"><use href="#i-archive"/></svg><span>Archive</span></a>
+      <a class="ids-nav__item" href="#/health" data-route="health"><svg class="ids-icon"><use href="#i-shield"/></svg><span>Health</span></a>
+    </nav>
+
+    <p class="side-label">Synced tools</p>
+    <ul class="side-list">
+      <li><svg class="ids-icon"><use href="#i-terminal"/></svg><span>Claude Code</span></li>
+      <li><svg class="ids-icon"><use href="#i-code"/></svg><span>Codex</span></li>
+      <li><svg class="ids-icon"><use href="#i-monitor"/></svg><span>Claude Desktop</span></li>
+    </ul>
+
+    <p class="side-label">This device</p>
+    <div class="side-device">
+      <span class="team-dot" id="side-dot"></span>
+      <div><b id="side-device-name">&mdash;</b><small id="side-device-state">starting&hellip;</small></div>
+    </div>
+
+    <a class="side-settings ids-nav__item" href="#/settings" data-route="settings"><svg class="ids-icon"><use href="#i-settings"/></svg><span>Settings</span></a>
+  </aside>
+
+  <section class="main">
+    <header class="topbar">
+      <div>
+        <h1 class="greeting" id="greeting">Hi!</h1>
+        <p class="subline" id="subline">&nbsp;</p>
+      </div>
+      <div class="top-actions">
+        <button class="ids-btn ids-btn--dark ids-btn--lg" id="btn-sync" data-action="sync"><svg class="ids-icon ids-icon--xs"><use href="#i-refresh"/></svg><span>Sync now</span></button>
+        <a class="ids-iconbtn" href="#/archive" aria-label="Search sessions"><svg class="ids-icon"><use href="#i-search"/></svg></a>
+        <button class="ids-iconbtn" id="btn-bell" data-action="activity" aria-label="Recent activity"><svg class="ids-icon"><use href="#i-bell"/></svg><span class="bell-dot" id="bell-dot" hidden></span></button>
+        <span class="avatar" id="avatar" aria-hidden="true">A</span>
+      </div>
+    </header>
+    <div id="page" class="page" tabindex="-1"></div>
+  </section>
+</div>
+
+<div id="modal-root"></div>
+<div class="ids-toast" id="toast" role="status" aria-live="polite"></div>
+<script src="js/app.js"></script>
+</body>
+</html>

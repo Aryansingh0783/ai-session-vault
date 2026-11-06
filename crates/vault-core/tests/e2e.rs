@@ -248,8 +248,8 @@ fn engine_syncs_automatically_between_two_devices() {
     fs::create_dir_all(a.env.claude_dir.join("projects")).unwrap();
     fs::create_dir_all(b.env.claude_dir.join("projects")).unwrap();
     let cfg = EngineConfig { quiet: Duration::from_millis(300), full_sync_every: Duration::from_secs(3600), ..Default::default() };
-    let ea = Engine::start(a.env.clone(), store, cfg.clone()).unwrap();
-    let eb = Engine::start(b.env.clone(), Store::open(vault.path(), PASS).unwrap(), cfg).unwrap();
+    let ea = Engine::start(a.env.clone(), std::sync::Arc::new(store), cfg.clone()).unwrap();
+    let eb = Engine::start(b.env.clone(), std::sync::Arc::new(Store::open(vault.path(), PASS).unwrap()), cfg).unwrap();
 
     let wait_finished = |e: &Engine, secs: u64| {
         let end = Instant::now() + Duration::from_secs(secs);

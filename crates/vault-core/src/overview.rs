@@ -38,6 +38,8 @@ pub struct DeviceView {
 pub struct Totals {
     pub files: usize,
     pub bytes: u64,
+    /// Size of the distinct contents (a file synced to several devices counts once).
+    pub unique_bytes: u64,
     pub sessions: usize,
     pub projects: usize,
     pub devices: usize,
@@ -61,6 +63,7 @@ pub fn overview(env: &Env, store: &Store, maps: &[PathMap]) -> Result<Overview> 
     let mut projects: BTreeMap<String, ProjectView> = BTreeMap::new();
     let mut project_devices: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     let mut totals = Totals::default();
+    let mut unique: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut devices = vec![];
     for m in &manifests {
         devices.push(DeviceView {
@@ -74,6 +77,9 @@ pub fn overview(env: &Env, store: &Store, maps: &[PathMap]) -> Result<Overview> 
         for (logical, e) in &m.entries {
             totals.files += 1;
             totals.bytes += e.size;
+            if unique.insert(e.hash.clone()) {
+                totals.unique_bytes += e.size;
+            }
             let Some(rest) = logical.strip_prefix("claude-code/projects/") else { continue };
             let Some((key, rel)) = rest.split_once('/') else { continue };
             let portable = m.projects.get(key).cloned().unwrap_or_else(|| format!("raw:{key}"));

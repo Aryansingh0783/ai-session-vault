@@ -46,6 +46,11 @@ pub fn scan_secrets(env: &Env) -> (usize, usize) {
 }
 
 pub fn run(env: &Env, vault_configured: bool) -> Vec<Finding> {
+    run_opts(env, vault_configured, true)
+}
+
+/// `deep` also scans every session log for leaked secrets (reads all of them; seconds on big histories).
+pub fn run_opts(env: &Env, vault_configured: bool, deep: bool) -> Vec<Finding> {
     let mut out = vec![];
     out.push(if env.claude_dir.is_dir() {
         f(Level::Ok, "Claude Code found", env.claude_dir.display().to_string())
@@ -63,12 +68,17 @@ pub fn run(env: &Env, vault_configured: bool) -> Vec<Finding> {
             format!("cleanupPeriodDays is {}; sessions older than that are purged at startup. Your vault keeps them (deletions are never synced), but run a backup at least that often, or raise the value in {}.", other.map_or("unset (default 30)".into(), |d| d.to_string()), settings.display()),
         )),
     }
-    let (files, hits) = scan_secrets(env);
+    if !deep {
+        out.push(f(Level::Info, "Secret scan not run", "scans every session log for API keys and tokens; run it from the Health page"));
+    }
+    let (files, hits) = if deep { scan_secrets(env) } else { (0, 0) };
+    if deep {
     out.push(if hits == 0 {
         f(Level::Ok, "No secret-looking strings in session logs", "")
     } else {
         f(Level::Warn, "Secrets found in session logs", format!("{hits} secret-looking string(s) in {files} file(s) (API keys / tokens that appeared in tool output). The vault encrypts everything, but rotate keys you pasted into chats and avoid sharing exported transcripts."))
     });
+    }
     let run = running_tools();
     if !run.is_empty() {
         out.push(f(Level::Warn, "AI tools are running", format!("{} - close them before restoring so files aren't overwritten", run.join(", "))));

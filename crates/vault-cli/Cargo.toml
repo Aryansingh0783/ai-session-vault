@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 vault-core = { path = "../vault-core" }
+vault-ui = { path = "../vault-ui" }
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
 rpassword = "7"

@@ -260,6 +260,8 @@ fn scan_local(env: &Env, comps: &[Component], state: &mut State) -> (Vec<Item>, 
             push(format!("claude-code/config/{}", rel_posix(&env.claude_dir, &f)), f);
         }
         let proot = env.claude_dir.join("projects");
+        // Read fresh each run so exclusions added from the UI/CLI apply without a restart.
+        let excluded: Vec<String> = crate::env::read_config(&env.state_dir).get("exclude_projects").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_else(|| env.exclude_projects.clone());
         if let Ok(rd) = fs::read_dir(&proot) {
             let mut dirs: Vec<_> = rd.flatten().filter(|e| e.path().is_dir()).map(|e| e.path()).collect();
             dirs.sort();
@@ -280,7 +282,7 @@ fn scan_local(env: &Env, comps: &[Component], state: &mut State) -> (Vec<Item>, 
                     }
                     None => (format!("raw-{name}"), format!("raw:{name}")),
                 };
-                if env.exclude_projects.iter().any(|x| crate::paths::prefix_match(&value, x).is_some()) {
+                if excluded.iter().any(|x| crate::paths::prefix_match(&value, x).is_some()) {
                     continue;
                 }
                 projects.insert(key.clone(), value);
@@ -827,10 +829,6 @@ pub fn restore(env: &Env, store: &Store, state: &mut State, opts: &Options, log:
     let mut rep = Report::default();
     let (manifests, warns) = store.read_all_manifests()?;
     rep.warnings.extend(warns);
-    let running = running_tools();
-    if !running.is_empty() && !opts.dry_run {
-        rep.warnings.push(format!("{} appears to be running; restored files may be overwritten by it. Close it and restore again to be safe.", running.join(" and ")));
-    }
     let mut projects: BTreeMap<String, String> = BTreeMap::new();
     let mut cands: BTreeMap<String, Vec<(&str, &Entry)>> = BTreeMap::new();
     for m in &manifests {
@@ -885,6 +883,13 @@ pub fn restore(env: &Env, store: &Store, state: &mut State, opts: &Options, log:
         }
     }
     rep.safety_copies = safety.count;
+    // Only worth mentioning when something was actually written into the tools' folders.
+    if (rep.downloaded + rep.merged) > 0 && !opts.dry_run {
+        let running = running_tools();
+        if !running.is_empty() {
+            rep.warnings.push(format!("{} appears to be running; restored files may be overwritten by it. Close it and restore again to be safe.", running.join(" and ")));
+        }
+    }
     rep.missing_projects = missing.into_iter().collect();
     if !opts.dry_run {
         state.save(env)?;

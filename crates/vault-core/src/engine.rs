@@ -129,7 +129,7 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn start(env: Env, store: Store, cfg: EngineConfig) -> Result<Engine> {
+    pub fn start(env: Env, store: Arc<Store>, cfg: EngineConfig) -> Result<Engine> {
         let (tx, rx) = channel::<Msg>();
         let (etx, erx) = channel::<Event>();
         let cancel = Arc::new(AtomicBool::new(false));
@@ -143,6 +143,13 @@ impl Engine {
             drop(watchers);
         })?;
         Ok(Engine { handle, events: erx, thread: Some(thread) })
+    }
+
+    /// Split into the control handle, the event stream and the worker thread (for servers that
+    /// need to own the event stream themselves).
+    pub fn into_parts(mut self) -> (Handle, Receiver<Event>, Option<std::thread::JoinHandle<()>>) {
+        let t = self.thread.take();
+        (self.handle, self.events, t)
     }
 
     /// Stop the engine and wait for it to finish.
@@ -206,7 +213,7 @@ fn start_watchers(env: &Env, store: &Store, tx: &Sender<Msg>) -> Vec<Recommended
 
 struct Core {
     env: Env,
-    store: Store,
+    store: Arc<Store>,
     state: State,
     cfg: EngineConfig,
     etx: Sender<Event>,
@@ -266,7 +273,7 @@ impl Core {
     }
 }
 
-fn run(env: Env, store: Store, cfg: EngineConfig, rx: Receiver<Msg>, etx: Sender<Event>, cancel: Arc<AtomicBool>) {
+fn run(env: Env, store: Arc<Store>, cfg: EngineConfig, rx: Receiver<Msg>, etx: Sender<Event>, cancel: Arc<AtomicBool>) {
     let state = State::load(&env);
     let status = Status { phase: Phase::Starting, pending_changes: 0, last_sync: None, last_error: None, syncs_done: 0 };
     let mut core = Core { env, store, state, cfg, etx, cancel, status };

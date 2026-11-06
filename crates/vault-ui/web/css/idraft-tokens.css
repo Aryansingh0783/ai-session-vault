@@ -1,0 +1,114 @@
+/* ==========================================================================
+   iDraft UI Kit — Design Tokens
+   Source of truth: reference/reference.png (1024×768)
+   Every value here is measured from the reference or derived from it.
+   ========================================================================== */
+
+@font-face {
+  font-family: "General Sans";
+  src: url("../assets/fonts/general-sans-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "General Sans";
+  src: url("../assets/fonts/general-sans-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "General Sans";
+  src: url("../assets/fonts/general-sans-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "General Sans";
+  src: url("../assets/fonts/general-sans-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ---- palette (sampled from reference) ---- */
+  --id-ink:            #161616;   /* primary text */
+  --id-ink-soft:       #2a2a2a;
+  --id-ink-card:       #262626;   /* dark cards / active nav / projects */
+  --id-ink-card-2:     #282828;
+  --id-paper:          #fdfdfd;   /* solid cards + sidebar */
+  --id-paper-warm:     #fefefe;
+  --id-muted:          #8f8f8f;   /* secondary text on light */
+  --id-muted-2:        #b3b3b3;   /* tertiary text / disabled */
+  --id-on-dark:        #ffffff;
+  --id-on-dark-muted:  #b9b9b9;
+  --id-on-dark-faint:  #8a8a8a;
+  --id-line:           #e9e9e9;
+  --id-line-strong:    #d5d5d5;
+  --id-dashed:         #9a9a9a;
+
+  /* glass */
+  --id-glass-shell:    rgba(255, 255, 255, 0.30);
+  --id-glass-card:     rgba(255, 255, 255, 0.62);
+  --id-glass-border:   rgba(255, 255, 255, 0.55);
+  --id-glass-blur:     26px;
+
+  /* stage */
+  --id-stage:          #c9c9c9;
+  --id-stage-deep:     #bdbdbd;
+
+  /* accents (monochrome system) */
+  --id-accent:         #161616;
+  --id-accent-contrast:#ffffff;
+  --id-success:        #1f1f1f;
+  --id-study:          #a9a9a9;
+  --id-project:        #c9c9c9;
+
+  /* ---- radii ---- */
+  --id-r-shell:        30px;
+  --id-r-card:         22px;
+  --id-r-panel:        20px;
+  --id-r-tile:         12px;
+  --id-r-pill:         999px;
+  --id-r-menu:         10px;
+
+  /* ---- type ---- */
+  --id-font:           "General Sans", "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --id-font-display:   "General Sans", "Inter", "Segoe UI", system-ui, sans-serif;
+
+  --id-fs-h1:          21.5px;
+  --id-fs-title:       14.2px;   /* card titles */
+  --id-fs-section:     14.2px;   /* section headings */
+  --id-fs-nav:         13.6px;
+  --id-fs-body:        12.5px;
+  --id-fs-small:       10px;
+  --id-fs-micro:       8px;
+  --id-fs-nano:        7px;
+  --id-fs-stat:        30px;
+  --id-fs-mini:        22px;
+  --id-fs-gauge:       18px;
+
+  --id-lh-tight:       1.1;
+  --id-lh-body:        1.28;
+  --id-tracking-label: 0.09em;
+
+  /* ---- shadows / effects ---- */
+  --id-shadow-shell:   0 32px 90px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --id-shadow-sidebar: 0 20px 45px rgba(0, 0, 0, 0.07), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  --id-shadow-card:    0 14px 34px rgba(0, 0, 0, 0.06);
+  --id-shadow-dark:    0 16px 38px rgba(0, 0, 0, 0.16);
+  --id-shadow-btn:     0 8px 18px rgba(0, 0, 0, 0.16);
+
+  /* ---- spacing (4px base) ---- */
+  --id-s1: 4px;
+  --id-s2: 8px;
+  --id-s3: 12px;
+  --id-s4: 16px;
+  --id-s5: 20px;
+  --id-s6: 24px;
+  --id-s7: 28px;
+  --id-s8: 32px;
+}

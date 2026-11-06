@@ -3,16 +3,18 @@
 Carry your Claude Code, Codex and Claude Desktop sessions between computers. Everything in the vault is
 encrypted, and a plain file-sync tool (OneDrive, Google Drive, Dropbox, Syncthing, a USB stick) can't corrupt it.
 
-Status: **core + CLI working** (`avault`), 33 automated tests. The desktop UI is waiting on designs.
+Status: **core, CLI and app UI working** (`avault`, `avault ui`), 37 automated tests.
 
 ```
 crates/vault-core   library: crypto, vault store, sync engine, archive/search, doctor (no UI)
-crates/vault-cli    `avault` command line, with --json output for a future desktop app
+crates/vault-cli    `avault` command line, with --json output
+crates/vault-ui     the app: a local web UI (iDraft-style design) served by the Rust core, over the live engine
 ```
 
 ## Quick start
 
 ```
+avault ui                                      # open the app (Dashboard, Projects, Devices, Archive, Health, Settings)
 avault init --vault "D:\OneDrive\AI Vault"     # once; prints a recovery key - keep it
 avault sync                                    # on every device: pulls others' changes, then publishes yours
 avault doctor                                  # checks for the common gotchas
@@ -52,6 +54,9 @@ avault context "rust lifetimes" --pick 1       # paste-ready context pack for a 
 | Archive was a separate plaintext folder | Archive conversations sync (encrypted) like everything else |
 | Python + PyInstaller (SmartScreen warnings) | Single static binary |
 
+## The app (`avault ui`)
+A local web app in the iDraft design language (glass shell, white sidebar, dark cards, pill buttons; loaders from the loader sheet), served by the Rust core on `127.0.0.1` with a per-run access token and Host/Origin checks. It shows the vault overview, a 7-day sync activity chart, storage savings, health checks, live engine status (progress over server-sent events), projects, devices (add a device with a one-time code, revoke access), a search/reader for every session with "copy as context pack", integrity checks, and settings (project exclusions). `avault ui --read-only` shows the vault without running the sync engine.
+
 ## How the vault works
 
 ```
@@ -75,7 +80,7 @@ Done: autostart at login, device enrollment with revocable access (`enroll` / `j
 partial-line guard, MSIX desktop path, secret scan in `doctor`, retention warning.
 
 Next:
-1. **Desktop UI** (Tauri, designs pending) on top of `vault-core` (`--json` already gives it a stable surface).
+1. Wrap the app in a native window (Tauri/WebView2) and add a tray icon; the UI already runs as a local app window (`avault ui` opens Edge/Chrome `--app`).
 2. Streaming merge for logs over 2 GiB (smaller logs merge in memory; larger ones are skipped and reported). Content-defined chunking if edits-in-the-middle ever matter.
 4. A tray icon / real Windows service wrapper (autostart at login already exists: `avault autostart enable`).
 6. Per-OS layers for `settings.json` (key-level merge and per-machine keys already exist).
