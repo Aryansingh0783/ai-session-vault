@@ -240,9 +240,9 @@
       <header class="card__head"><h2 class="card__title">Sync activity</h2><span class="tool">${ico("wave")}</span></header>
       <div class="legend"><span class="ids-legend"><span class="ids-dot"></span>Uploaded</span><span class="ids-legend"><span class="ids-dot ids-dot--muted"></span>Received</span></div>
       <div class="act__chart"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Sync activity over the last 7 days">
-        <path class="ids-chart__axis" d="M.5 0V${H - .5}H${W - .5}V0" vector-effect="non-scaling-stroke"/>
+        ${any ? `<path class="ids-chart__axis" d="M.5 0V${H - .5}H${W - .5}V0" vector-effect="non-scaling-stroke"/>
         <path class="ids-chart__study" d="${smooth(down)}" vector-effect="non-scaling-stroke"/>
-        <path class="ids-chart__sport" d="${smooth(up)}" vector-effect="non-scaling-stroke"/></svg>${tip}
+        <path class="ids-chart__sport" d="${smooth(up)}" vector-effect="non-scaling-stroke"/>` : `<path class="act__idle" d="M0 ${H - 8}H${W}" vector-effect="non-scaling-stroke"/>`}</svg>${tip}
         ${any ? "" : `<div class="act__empty">No sync activity yet.<br>It appears here after your first sync.</div>`}</div>
       <div class="act__days ids-chart__days">${days.map((d, i) => `<span class="ids-chart__day ${i === 6 ? "is-active" : ""}" title="${d.d.toDateString()}">${names[d.d.getDay()]}</span>`).join("")}</div>
     </section>`;
