@@ -3,7 +3,7 @@
 Carry your Claude Code, Codex and Claude Desktop sessions between computers. Everything in the vault is
 encrypted, and a plain file-sync tool (OneDrive, Google Drive, Dropbox, Syncthing, a USB stick) can't corrupt it.
 
-Status: **core + CLI working** (`avault`), 29 automated tests. The desktop UI is waiting on designs.
+Status: **core + CLI working** (`avault`), 30 automated tests. The desktop UI is waiting on designs.
 
 ```
 crates/vault-core   library: crypto, vault store, sync engine, archive/search, doctor (no UI)
@@ -39,6 +39,7 @@ avault context "rust lifetimes" --pick 1       # paste-ready context pack for a 
 | Newest-wins by mtime: a session continued on two devices loses one side | JSONL logs are **merged by line union**; nothing is overwritten |
 | One shared `signatures.json` / `manifest.json` (cloud-sync conflict magnet) | Write-once objects + one manifest per device: **no file is ever written by two machines** |
 | `settings.json` replaced wholesale | Merged **key by key**; machine-specific keys (`statusLine`, `apiKeyHelper`, `awsAuthRefresh`, ... editable via `local_keys` in `~/.ai-vault/config.json`) never leave their device |
+| Text edited on two devices: silent loser | `CLAUDE.md`, memory notes, rules, TOML are **merged three-way** when the edits touch different lines; overlapping edits fall back to newest-wins with a safety copy |
 | Config edited on two devices: silent loser | Conflict detected via last-synced hash, reported, loser saved to `~/.ai-vault/safety-copies` |
 | Re-read every file each run, whole files in memory | Size+mtime hash cache; files stream through 1 MiB encrypted chunks, so a growing session log uploads only its new tail, memory stays bounded, plain files have no size limit, and an interrupted run resumes (checkpoints) |
 | One-shot script, polling | **Always-on engine** (`vault_core::engine`): watches your tools' folders and the vault folder, waits for a session to go quiet, then does an incremental sync; periodic full sync as a safety net; exponential backoff when the cloud folder isn't ready; pause / resume / cancel; typed event stream (status, progress, finished, error) for a UI |
@@ -67,7 +68,7 @@ A read-only backup of a real `~/.claude` + `~/.codex` (3,177 files, ~1.3 GB of s
 
 ## Roadmap (from the pain-point research)
 
-Done: project exclusion, OS keychain storage (`remember`), UI view-model API (`vault_core::overview`), key-level `settings.json` merge with per-machine keys, `--block-secrets`, consistent snapshots of live SQLite databases (Codex history) via SQLite's backup API, `verify`, `devices`, chunked streaming storage, always-on engine, `--redact`, Python-vault import, portable project ids, log merge, conflict detection, encryption of everything, recovery key, atomic writes,
+Done: three-way merge of text files, project exclusion, OS keychain storage (`remember`), UI view-model API (`vault_core::overview`), key-level `settings.json` merge with per-machine keys, `--block-secrets`, consistent snapshots of live SQLite databases (Codex history) via SQLite's backup API, `verify`, `devices`, chunked streaming storage, always-on engine, `--redact`, Python-vault import, portable project ids, log merge, conflict detection, encryption of everything, recovery key, atomic writes,
 partial-line guard, MSIX desktop path, secret scan in `doctor`, retention warning.
 
 Next:

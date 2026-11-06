@@ -178,7 +178,7 @@ fn walk_files(root: &Path) -> Vec<PathBuf> {
         .filter(|e| e.file_type().is_file())
         .filter(|e| {
             let n = e.file_name().to_string_lossy();
-            !EXCLUDE.contains(&n.as_ref()) && !n.ends_with(".vaulttmp")
+            !EXCLUDE.contains(&n.as_ref()) && !n.ends_with(".vaulttmp") && !n.ends_with(".desktop-released.json")
         })
         .map(|e| e.into_path())
         .collect()
@@ -412,6 +412,63 @@ fn prepare_to(item: &Item, env: &Env, redact: bool, out: &mut dyn Write) -> Resu
 fn prepare_mem(item: &Item, env: &Env, redact: bool) -> Result<Option<Vec<u8>>> {
     let mut v = Vec::new();
     Ok(prepare_to(item, env, redact, &mut v)?.then_some(v))
+}
+
+/// Small prose/config files (CLAUDE.md, memory notes, rules, TOML) are merged line by line when two
+/// devices edit different parts. Everything else falls back to newest-wins.
+fn mergeable(p: &Path) -> bool {
+    p.extension().map_or(false, |e| matches!(e.to_str(), Some("md") | Some("txt") | Some("toml")))
+}
+
+const BASE_MAX: u64 = 256 * 1024;
+
+/// Keep a local copy of the last-synced version so a later two-sided edit can be merged three-way.
+fn save_base(env: &Env, hash: &str, path: &Path) {
+    if !mergeable(path) || fs::metadata(path).map_or(true, |m| m.len() > BASE_MAX) {
+        return;
+    }
+    let dst = env.state_dir.join("base").join(hash);
+    if !dst.exists() {
+        if let Some(d) = dst.parent() {
+            let _ = fs::create_dir_all(d);
+        }
+        let _ = fs::copy(path, dst);
+    }
+}
+
+fn prune_bases(env: &Env, state: &State) {
+    let keep: HashSet<&str> = state.files.values().filter_map(|f| f.synced_hash.as_deref()).collect();
+    if let Ok(rd) = fs::read_dir(env.state_dir.join("base")) {
+        for e in rd.flatten() {
+            if !keep.contains(e.file_name().to_string_lossy().as_ref()) {
+                let _ = fs::remove_file(e.path());
+            }
+        }
+    }
+}
+
+/// Three-way merge of a text file edited on two devices. `Ok(false)` = overlapping edits or no base.
+#[allow(clippy::too_many_arguments)]
+fn try_merge(env: &Env, store: &Store, state: &mut State, item: &Item, winner: &Entry, base_hash: Option<&str>, safety: &mut SafetyCopies) -> Result<bool> {
+    let Some(base_hash) = base_hash else { return Ok(false) };
+    let Ok(anc) = fs::read_to_string(env.state_dir.join("base").join(base_hash)) else { return Ok(false) };
+    let (Ok(ours), Ok(theirs)) = (fs::read_to_string(&item.local), String::from_utf8(store.read_all(winner)?)) else { return Ok(false) };
+    let Ok(merged) = diffy::merge(&anc, &ours, &theirs) else { return Ok(false) };
+    safety.save(&item.local)?;
+    atomic_write(&item.local, merged.as_bytes())?;
+    let md = fs::metadata(&item.local)?;
+    let f = state.files.entry(item.logical.clone()).or_default();
+    f.size = md.len();
+    f.mtime_ms = mtime_ms(&md);
+    f.local_hash = store.keys.object_id(merged.as_bytes());
+    // The remote version is now our common ancestor; the merged text still needs uploading.
+    f.synced_hash = Some(winner.hash.clone());
+    let dst = env.state_dir.join("base").join(&winner.hash);
+    if let Some(d) = dst.parent() {
+        let _ = fs::create_dir_all(d);
+    }
+    let _ = fs::write(dst, theirs);
+    Ok(true)
 }
 
 /// `settings.json` minus the machine-specific keys, in a canonical form. Unparseable files pass through.
@@ -702,6 +759,7 @@ pub fn backup(env: &Env, store: &Store, state: &mut State, opts: &Options, log: 
         }
         if item.kind == Kind::File {
             fs_entry.synced_hash = Some(id.clone());
+            save_base(env, &id, &item.local);
         } else if !fs_entry.seen.contains(&id) {
             fs_entry.seen.push(id.clone());
         }
@@ -831,6 +889,7 @@ pub fn restore(env: &Env, store: &Store, state: &mut State, opts: &Options, log:
     if !opts.dry_run {
         state.save(env)?;
         prune_safety(env);
+        prune_bases(env, state);
     }
     Ok(rep)
 }
@@ -916,6 +975,7 @@ fn restore_file(env: &Env, store: &Store, state: &mut State, item: &Item, entrie
         f.mtime_ms = mtime_ms(&md);
         f.local_hash = winner.hash.clone();
         f.synced_hash = Some(winner.hash.clone());
+        save_base(env, &winner.hash, &item.local);
         Ok(())
     };
     match local {
@@ -930,11 +990,17 @@ fn restore_file(env: &Env, store: &Store, state: &mut State, item: &Item, entrie
         Some((lh, lmt)) => {
             if *lh == winner.hash {
                 state.files.entry(item.logical.clone()).or_default().synced_hash = Some(lh.clone());
+                save_base(env, lh, &item.local);
                 rep.unchanged += 1;
                 return Ok(());
             }
             let local_changed = base.as_deref() != Some(lh.as_str());
             let remote_changed = base.as_deref() != Some(winner.hash.as_str());
+            if local_changed && remote_changed && !opts.dry_run && mergeable(&item.local) && try_merge(env, store, state, item, winner, base.as_deref(), safety)? {
+                rep.merged += 1;
+                rep.warnings.push(format!("{}: edited on two devices; the changes were combined automatically", item.logical));
+                return Ok(());
+            }
             if !remote_changed {
                 rep.unchanged += 1; // local edit waiting to be uploaded
             } else if winner.mtime_ms > *lmt + TOL_MS {

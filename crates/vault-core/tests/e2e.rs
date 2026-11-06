@@ -418,3 +418,33 @@ fn excluded_projects_are_never_uploaded() {
     let keys: Vec<_> = ms[0].entries.keys().collect();
     assert!(keys.iter().any(|k| k.contains("keep")) && !keys.iter().any(|k| k.contains("noise")), "{keys:?}");
 }
+
+#[test]
+fn text_edits_to_different_lines_are_merged_three_way() {
+    let vault = tempfile::tempdir().unwrap();
+    let (store, _) = Store::init(vault.path(), PASS, fast()).unwrap();
+    let mut a = Device::new();
+    let mut b = Device::new();
+    let (fa, fb) = (a.env.claude_dir.join("CLAUDE.md"), b.env.claude_dir.join("CLAUDE.md"));
+    a.write(&fa, "# Rules\nline one\nline two\nline three\nline four\n");
+    a.sync(&store);
+    b.sync(&store);
+    assert!(fs::read_to_string(&fb).unwrap().contains("line two"));
+
+    // Each device edits a different line before they see each other's change.
+    fs::write(&fa, "# Rules\nline one EDITED BY A\nline two\nline three\nline four\n").unwrap();
+    filetime::set_file_mtime(&fa, filetime::FileTime::from_unix_time(1_700_000_000, 0)).unwrap();
+    fs::write(&fb, "# Rules\nline one\nline two\nline three\nline four EDITED BY B\n").unwrap();
+    a.sync(&store);
+    let rb = b.sync(&store);
+    assert_eq!(rb.merged, 1, "{rb:?}");
+    assert!(rb.conflicts.is_empty() && rb.failed.is_empty(), "{rb:?}");
+    a.sync(&store);
+    for (name, f) in [("A", &fa), ("B", &fb)] {
+        let t = fs::read_to_string(f).unwrap();
+        assert!(t.contains("EDITED BY A") && t.contains("EDITED BY B"), "{name} lost an edit: {t}");
+    }
+    // And it settles: nothing left to do.
+    let again = b.sync(&store);
+    assert_eq!((again.uploaded, again.downloaded, again.merged), (0, 0, 0), "{again:?}");
+}
