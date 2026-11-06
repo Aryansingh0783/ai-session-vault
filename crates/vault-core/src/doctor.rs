@@ -65,7 +65,7 @@ pub fn run_opts(env: &Env, vault_configured: bool, deep: bool) -> Vec<Finding> {
         other => out.push(f(
             Level::Warn,
             "Claude Code deletes old sessions automatically",
-            format!("cleanupPeriodDays is {}; sessions older than that are purged at startup. Your vault keeps them (deletions are never synced), but run a backup at least that often, or raise the value in {}.", other.map_or("unset (default 30)".into(), |d| d.to_string()), settings.display()),
+            format!("cleanupPeriodDays is {}, so older sessions are purged when Claude starts. Your vault keeps them (deletions never sync) as long as a sync runs at least that often. Raise the value in {} to keep them on this device too.", other.map_or("unset (30 days)".into(), |d| d.to_string()), settings.display()),
         )),
     }
     if !deep {
@@ -81,7 +81,7 @@ pub fn run_opts(env: &Env, vault_configured: bool, deep: bool) -> Vec<Finding> {
     }
     let run = running_tools();
     if !run.is_empty() {
-        out.push(f(Level::Warn, "AI tools are running", format!("{} - close them before restoring so files aren't overwritten", run.join(", "))));
+        out.push(f(Level::Info, "AI tools are running", format!("{} - normal. Close them first when restoring onto this device, so they can't overwrite restored files", run.join(", "))));
     }
     if cfg!(windows) && env.desktop_cfg.to_string_lossy().contains("Packages") {
         out.push(f(Level::Info, "Claude Desktop (Microsoft Store build)", format!("using its virtualized config: {}", env.desktop_cfg.display())));

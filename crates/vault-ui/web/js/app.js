@@ -270,14 +270,16 @@
         <button class="ids-btn ids-btn--ghost" data-action="verify">Verify vault ${ico("download", "ids-icon--sm")}</button></div>
     </section>`;
   }
+  const firstSentence = (t) => { const m = String(t).match(/^.*?[.!?](\s|$)/); const s = (m ? m[0] : t).trim(); return s.length > 150 ? s.slice(0, 147).replace(/\s+\S*$/, "") + "…" : s; };
   function healthCard() {
     const items = S.doctor || [];
     const ok = items.filter((x) => x.level === "Ok").length;
+    const scored = items.filter((x) => x.level !== "Info").length;
     const C = 2 * Math.PI * 17;
-    const rows = items.length ? items.map((x) => `<div class="chk__row is-${x.level.toLowerCase()}"><span class="ids-check ${x.level === "Ok" ? "is-checked" : ""}">${ico("check")}</span><div>${esc(x.title)}${x.detail && x.level !== "Ok" ? `<small>${esc(x.detail.length > 110 ? x.detail.slice(0, 107) + "…" : x.detail)}</small>` : ""}</div></div>`).join("") : `<div class="loading">${loader("dots")}</div>`;
+    const rows = items.length ? items.map((x) => `<div class="chk__row is-${x.level.toLowerCase()}"><span class="ids-check ${x.level === "Ok" ? "is-checked" : ""}">${ico("check")}</span><div>${esc(x.title)}${x.detail && x.level !== "Ok" ? `<small>${esc(firstSentence(x.detail))}</small>` : ""}</div></div>`).join("") : `<div class="loading">${loader("dots")}</div>`;
     return `<section class="card ids-card ids-card--panel chk">
       <header class="card__head"><h2 class="card__title">Health checks</h2>
-        <span class="ring" aria-label="${ok} of ${items.length} checks passed"><svg viewBox="0 0 40 40"><circle class="t" cx="20" cy="20" r="17"/><circle class="v" cx="20" cy="20" r="17" stroke-dasharray="${items.length ? (ok / items.length) * C : 0} ${C}"/></svg>${ok}/${items.length}</span></header>
+        <span class="ring" aria-label="${ok} of ${scored} checks passed"><svg viewBox="0 0 40 40"><circle class="t" cx="20" cy="20" r="17"/><circle class="v" cx="20" cy="20" r="17" stroke-dasharray="${scored ? (ok / scored) * C : C} ${C}"/></svg>${ok}/${scored}</span></header>
       <div class="chk__rows">${rows}</div></section>`;
   }
   function engineCards() {
@@ -292,15 +294,15 @@
         <div class="progress"><span id="prog-bar"></span></div>
         <div class="tcard__meta" id="prog-text">&nbsp;</div></div>
       <div class="tcard tcard--dark"><div class="tcard__top">${ico("stats")}</div>
-        <div class="tcard__title">Last sync</div>
+        <div class="tcard__title">Last transfer</div>
         ${last ? `<div class="tcard__nums"><div><b>${num(last.uploaded)}</b><span>uploaded</span></div><div><b>${num(last.downloaded + last.merged)}</b><span>received</span></div></div>
-        <div class="tcard__meta">${ago(last.at)}${last.conflicts ? ` · ${last.conflicts} conflict${last.conflicts > 1 ? "s" : ""}` : ""}</div>` : `<div class="tcard__meta" style="margin-top:14px">Nothing yet</div>`}</div>
+        <div class="tcard__meta">${ago(last.at)}${last.conflicts ? ` · ${last.conflicts} conflict${last.conflicts > 1 ? "s" : ""}` : ""}</div>` : `<div class="tcard__meta" style="margin-top:14px">Nothing transferred yet</div>`}</div>
       <button class="addcard" data-action="add-device">${ico("plus")}<span>Add a device</span></button>`;
   }
   function projectCards(list, limit) {
     const total = S.overview.totals.devices || 1;
     const C = 2 * Math.PI * 14;
-    return list.slice(0, limit).map((p) => `<article class="pcard ${p.exists_locally || p.portable_path.startsWith("raw:") ? "" : "pcard--dim"}">
+    return list.slice(0, limit).map((p) => `<article class="pcard ${p.exists_locally || p.portable_path.startsWith("raw:") ? "" : "pcard--dim"}" data-action="open-project" data-q="${esc(baseName(p.portable_path))}" tabindex="0" role="link" aria-label="Search sessions in ${esc(baseName(p.portable_path))}">
       <header class="pcard__head"><h3 class="pcard__title" title="${esc(p.portable_path)}">${esc(baseName(p.portable_path))}</h3>
         <span class="ring" title="${p.devices.length} of ${total} devices have this project"><svg viewBox="0 0 34 34"><circle class="t" cx="17" cy="17" r="14"/><circle class="v" cx="17" cy="17" r="14" stroke-dasharray="${(p.devices.length / total) * C} ${C}"/></svg>${p.devices.length}/${total}</span></header>
       <div class="pcard__meta"><span class="ids-dot"></span>${p.exists_locally ? "On this device" : p.portable_path.startsWith("raw:") ? "Notes only" : "Folder not on this device"}</div>
@@ -441,7 +443,7 @@
   /* ------------------------------------------------------------ modals + popover */
   function modal(html) {
     const root = $("#modal-root");
-    root.innerHTML = `<div class="modal-bg" data-action="close-modal"><div class="modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">${html}</div></div>`;
+    root.innerHTML = `<div class="modal-bg" data-action="close-modal"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
     const f = $("button, input", root); if (f) f.focus();
   }
   const closeModal = () => { $("#modal-root").innerHTML = ""; };
@@ -478,6 +480,7 @@
     "copy-vault": () => copy(S.settings.vault_path, "Vault folder copied"),
     "copy-pack": async (b) => busy(b, async () => { copy(await api(`/api/pack?source=${encodeURIComponent(acur.source)}&id=${encodeURIComponent(acur.id)}`), "Context pack copied - paste it into a new chat"); }),
     "open-hit": openHit,
+    "open-project": (el) => { location.hash = "#/archive?q=" + encodeURIComponent(el.dataset.q); },
     verify: (b) => runVerify(b, false),
     "verify-deep": (b) => runVerify(b, true),
     gc: (b) => busy(b, async () => { const r = await api("/api/gc", { method: "POST" }); toast(`Removed ${r.removed} unused object(s), freed ${fmtBytes(r.freed_bytes)}`); await loadCore(); updateLive(); }),
@@ -500,6 +503,7 @@
 
   document.addEventListener("click", (e) => {
     const el = e.target.closest("[data-action]");
+    if (el && el.classList.contains("modal-bg") && e.target.closest(".modal")) return; // clicks inside the dialog don't dismiss it
     if (el && ACTIONS[el.dataset.action]) { if (el.tagName === "A") e.preventDefault(); ACTIONS[el.dataset.action](el); return; }
     const v = e.target.closest("[data-view]");
     if (v) { pview = v.dataset.view; store.set("pview", pview); $$("[data-view]").forEach((x) => x.classList.toggle("is-active", x === v)); renderProjectList(); }
@@ -512,7 +516,8 @@
     if (!path) return;
     busy(null, async () => { await api("/api/exclude", { method: "POST", body: { path } }); S.settings = await api("/api/settings"); renderPage(); toast("Excluded"); });
   });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeModal(); const p = $(".popover"); if (p) p.remove(); } });
+  document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[data-action=open-project]")) { e.preventDefault(); ACTIONS["open-project"](e.target); }
+    if (e.key === "Escape") { closeModal(); const p = $(".popover"); if (p) p.remove(); } });
   window.addEventListener("hashchange", renderPage);
 
   /* ------------------------------------------------------------ boot */

@@ -229,6 +229,12 @@ impl App {
                     sh.progress = Some(Progress { phase: phase.clone(), done: *done, total: *total });
                 }
                 Event::SyncFinished { full, report } => {
+                    let changed = report.uploaded + report.downloaded + report.merged + report.conflicts.len() + report.failed.len() > 0;
+                    sh.progress = None;
+                    if !changed {
+                        // Routine "nothing to do" runs would bury the real activity.
+                        return self.broadcast(serde_json::to_string(ev).unwrap_or_default());
+                    }
                     let mut notes: Vec<String> = report.conflicts.clone();
                     notes.extend(report.warnings.iter().take(3).cloned());
                     sh.history.push(HistoryItem {
