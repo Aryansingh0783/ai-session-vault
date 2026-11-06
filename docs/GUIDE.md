@@ -42,7 +42,9 @@ folders of your AI tools and to the vault folder you choose.
 | **Devices** | Computers sharing this vault. Add a device with a one-time code, or revoke one. |
 | **Archive** | Search and read every session, plus imported claude.ai / ChatGPT exports. "Copy as context pack" makes a paste-ready summary for a new chat. |
 | **Health** | `doctor` checks, integrity check (Verify) and cleanup. A ring shows how many checks pass. Grey dashed rows are information, not problems. |
-| **Settings** | What is synced and which projects are excluded. |
+| **Settings** | Appearance (themes), which projects are excluded, and which settings keys stay on each device. |
+
+**Themes:** Settings, then Appearance. Match system, Light, Dark, Sand and Ocean. The choice is saved on this device only.
 
 The tray icon (with `avault app`): left click opens the window, right click gives Sync now, Pause, Resume, Quit.
 Closing the window only hides it; syncing continues. Choose **Quit** to stop.

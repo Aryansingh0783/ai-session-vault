@@ -413,10 +413,17 @@
   }
 
   /* ---- settings ---- */
+  const SWATCH = { light: ["#b9b9b9", "#fdfdfd", "#262626", "#161616"], dark: ["#2a2a2a", "#1b1b1b", "#2e2e2e", "#f1f1f1"], sand: ["#d8c6a8", "#fffcf6", "#3b3027", "#2b2118"], ocean: ["#a9bdd1", "#fbfdff", "#1e3344", "#12222f"] };
+  function themeSwatch(id) {
+    const c = SWATCH[id] || (matchMedia("(prefers-color-scheme: dark)").matches ? SWATCH.dark : SWATCH.light);
+    return `<span class="theme__sw" style="background:${c[0]}"><i style="background:${c[1]}"></i><i style="background:${c[2]}"></i><i style="background:${c[1]}"></i><i style="background:${c[3]}"></i></span>`;
+  }
   function settingsPage() {
     const s = S.settings;
     return `<div class="stack"><section class="card ids-card"><h2 class="card__title">Vault</h2>
         <dl class="kv kv--left" style="margin-top:14px"><dt>Folder</dt><dd class="mono">${esc(s.vault_path)}</dd><dt>Vault id</dt><dd class="mono">${esc(s.vault_id)}</dd><dt>Sync engine</dt><dd>${s.engine ? "Running" : "Not running (read-only view)"}</dd></dl></section>
+      <section class="card ids-card"><h2 class="card__title">Appearance</h2><p class="small muted" style="margin-top:6px">Saved on this device only.</p>
+        <div class="themes" role="radiogroup" aria-label="Theme">${(window.VaultTheme ? VaultTheme.themes : []).map((t) => `<button class="theme ${VaultTheme.get() === t.id ? "is-active" : ""}" role="radio" aria-checked="${VaultTheme.get() === t.id}" data-action="set-theme" data-theme-id="${t.id}">${themeSwatch(t.id)}<span class="theme__name">${esc(t.name)}<small>${esc(t.note)}</small></span></button>`).join("")}</div></section>
       <section class="card ids-card"><h2 class="card__title">Never upload these projects</h2><p class="small muted" style="margin-top:6px">Plugin-generated or noisy projects. Anything already in the vault stays there.</p>
         <div class="tags">${s.exclude_projects.length ? s.exclude_projects.map((p) => `<span class="tag">${esc(p)}<button data-action="unexclude" data-path="${esc(p)}" aria-label="Stop excluding ${esc(p)}">${ico("x")}</button></span>`).join("") : `<span class="small muted">Nothing excluded.</span>`}</div>
         <form class="inline" data-form="exclude"><input class="input input--grow" name="path" placeholder="~/.claude-mem/observer-sessions" aria-label="Project path to exclude"><button class="ids-btn ids-btn--dark" type="submit">Exclude</button></form></section>
@@ -471,6 +478,7 @@
 
   /* ------------------------------------------------------------ actions */
   const ACTIONS = {
+    "set-theme": (el) => { VaultTheme.set(el.dataset.themeId); renderPage(); },
     sync: (b) => busy(b, () => api("/api/sync", { method: "POST" }).then(() => toast("Sync started"))),
     "pause-toggle": (b) => busy(b, () => api(phase() === "paused" ? "/api/resume" : "/api/pause", { method: "POST" })),
     activity: () => activityPopover(),

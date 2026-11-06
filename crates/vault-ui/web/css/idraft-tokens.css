@@ -63,6 +63,8 @@
   /* accents (monochrome system) */
   --id-accent:         #161616;
   --id-accent-contrast:#ffffff;
+  --id-on-ink:         #ffffff;   /* text on ink-filled controls (inverts in dark) */
+  --id-ink-hover:      #000000;
   --id-success:        #1f1f1f;
   --id-study:          #a9a9a9;
   --id-project:        #c9c9c9;

@@ -1,0 +1,76 @@
+/* ==========================================================================
+   Themes. The default (Light) lives in idraft-tokens.css; each theme below
+   overrides tokens, plus a few surfaces that use translucent white.
+   <html data-theme="light|dark|sand|ocean">; "auto" is resolved by js/theme.js.
+   ========================================================================== */
+
+/* ---------- Sand: warm paper ---------- */
+:root[data-theme="sand"] {
+  --id-ink: #2b2118; --id-ink-soft: #3b3027; --id-ink-card: #3b3027; --id-ink-hover: #1a130d;
+  --id-paper: #fffcf6; --id-muted: #8a7f72; --id-muted-2: #b3a99b;
+  --id-line: #ece4d8; --id-line-strong: #dccfbd; --id-dashed: #a99a86;
+  --id-glass-card: rgba(255, 251, 242, 0.66);
+}
+:root[data-theme="sand"] body { background-color: #d8c6a8; background-blend-mode: multiply; }
+
+/* ---------- Ocean: cool blue-grey ---------- */
+:root[data-theme="ocean"] {
+  --id-ink: #12222f; --id-ink-soft: #1e3344; --id-ink-card: #1e3344; --id-ink-hover: #0a141c;
+  --id-paper: #fbfdff; --id-muted: #74869a; --id-muted-2: #a9b6c3;
+  --id-line: #e1e9ef; --id-line-strong: #cbd8e2; --id-dashed: #8497a9;
+  --id-glass-card: rgba(246, 251, 255, 0.66);
+}
+:root[data-theme="ocean"] body { background-color: #a9bdd1; background-blend-mode: multiply; }
+
+/* ---------- Dark ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --id-ink: #f1f1f1; --id-on-ink: #161616; --id-ink-soft: #d8d8d8; --id-ink-hover: #ffffff;
+  --id-ink-card: #2e2e2e; --id-paper: #1b1b1b; --id-paper-warm: #1b1b1b;
+  --id-muted: #9a9a9a; --id-muted-2: #6c6c6c;
+  --id-line: #2f2f2f; --id-line-strong: #404040; --id-dashed: #5d5d5d;
+  --id-glass-shell: rgba(255, 255, 255, 0.04); --id-glass-card: rgba(34, 34, 34, 0.7); --id-glass-border: rgba(255, 255, 255, 0.08);
+  --id-shadow-card: 0 14px 34px rgba(0, 0, 0, 0.35); --id-shadow-dark: 0 16px 38px rgba(0, 0, 0, 0.45);
+  --id-shadow-sidebar: 0 20px 45px rgba(0, 0, 0, 0.4);
+}
+:root[data-theme="dark"] body { background-color: #2a2a2a; background-blend-mode: multiply; }
+:root[data-theme="dark"] .shell { border-color: rgba(255, 255, 255, 0.08); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); }
+:root[data-theme="dark"] .card.ids-card--glass { background: rgba(36, 36, 36, 0.72); border-color: rgba(255, 255, 255, 0.07); }
+:root[data-theme="dark"] .input, :root[data-theme="dark"] .seg, :root[data-theme="dark"] .ids-iconbtn { background: rgba(255, 255, 255, 0.09); box-shadow: none; }
+:root[data-theme="dark"] .row, :root[data-theme="dark"] .hit, :root[data-theme="dark"] .viewer { background: rgba(255, 255, 255, 0.06); }
+:root[data-theme="dark"] .hit:hover, :root[data-theme="dark"] .ids-iconbtn:hover { background: rgba(255, 255, 255, 0.16); }
+:root[data-theme="dark"] .hit.is-active { background: var(--id-ink); color: var(--id-on-ink); }
+:root[data-theme="dark"] .msg { background: rgba(255, 255, 255, 0.08); }
+:root[data-theme="dark"] .msg.user { background: var(--id-ink); color: var(--id-on-ink); }
+:root[data-theme="dark"] .addcard:hover { background: rgba(255, 255, 255, 0.07); border-color: #8a8a8a; }
+:root[data-theme="dark"] .ids-nav__item:hover { background: rgba(255, 255, 255, 0.07); }
+:root[data-theme="dark"] .ids-nav__item.is-active { background: var(--id-ink); color: var(--id-on-ink); box-shadow: none; }
+:root[data-theme="dark"] .ids-btn--ghost:hover { background: rgba(255, 255, 255, 0.08); }
+:root[data-theme="dark"] .tcard__corner { background: #3a3a3a; }
+:root[data-theme="dark"] .dcard.is-me, :root[data-theme="dark"] .tcard--dark, :root[data-theme="dark"] .pcard { border: 1px solid rgba(255, 255, 255, 0.06); }
+:root[data-theme="dark"] .side-label, :root[data-theme="dark"] .ids-nav__label { color: #8d8d8d; }
+:root[data-theme="dark"] .side-list li { color: #cfcfcf; }
+:root[data-theme="dark"] .side-list li.is-off, :root[data-theme="dark"] .side-list li small { color: #6c6c6c; }
+:root[data-theme="dark"] .ids-chart__days, :root[data-theme="dark"] .ids-task__dots { color: #dcdcdc; }
+:root[data-theme="dark"] .ids-chart__axis { stroke: #cfcfcf; }
+:root[data-theme="dark"] .ids-chart__study { stroke: #6f6f6f; }
+:root[data-theme="dark"] .ids-chart__grid { stroke: #2d2d2d; }
+:root[data-theme="dark"] .act__idle { stroke: #555; }
+:root[data-theme="dark"] .ring .t { stroke: #333; }
+:root[data-theme="dark"] .bell-dot { box-shadow: 0 0 0 2px var(--id-paper); }
+:root[data-theme="dark"] .modal, :root[data-theme="dark"] .popover { border: 1px solid rgba(255, 255, 255, 0.08); }
+:root[data-theme="dark"] .code { background: #0f0f0f; color: #fff; }
+:root[data-theme="dark"] .ids-toast { background: #f1f1f1; color: #161616; }
+:root[data-theme="dark"] { --id-sub: #b5b5b5; }
+:root[data-theme="dark"] .ids-check.is-checked { color: var(--id-on-ink); }
+:root[data-theme="dark"] ::selection { background: #f1f1f1; color: #161616; }
+
+/* ---------- theme picker (Settings) ---------- */
+.themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 12px; margin-top: 14px; }
+.theme { border: 0; background: transparent; padding: 0; text-align: left; color: inherit; font: inherit; border-radius: 18px; }
+.theme__sw { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 3px; height: 74px; padding: 6px; border-radius: 18px; box-shadow: inset 0 0 0 1px var(--id-line-strong); }
+.theme__sw i { border-radius: 8px; display: block; }
+.theme__name { display: block; margin: 8px 4px 0; font-size: 13px; font-weight: 500; }
+.theme__name small { display: block; font-weight: 400; font-size: 11px; color: var(--id-muted); }
+.theme.is-active .theme__sw { box-shadow: 0 0 0 2px var(--id-ink); }
+.theme:focus-visible .theme__sw { box-shadow: 0 0 0 2px var(--id-ink), 0 0 0 5px var(--id-line-strong); }
