@@ -280,6 +280,9 @@ fn scan_local(env: &Env, comps: &[Component], state: &mut State) -> (Vec<Item>, 
                     }
                     None => (format!("raw-{name}"), format!("raw:{name}")),
                 };
+                if env.exclude_projects.iter().any(|x| crate::paths::prefix_match(&value, x).is_some()) {
+                    continue;
+                }
                 projects.insert(key.clone(), value);
                 for f in walk_files(&pdir) {
                     push(format!("claude-code/projects/{key}/{}", rel_posix(&pdir, &f)), f);

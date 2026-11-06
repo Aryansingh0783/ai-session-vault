@@ -397,3 +397,24 @@ fn overview_summarises_projects_for_a_ui() {
     assert!(p.exists_locally && p.devices.len() == 2, "{p:?}");
     assert_eq!(o.devices.iter().filter(|d| d.this_device).count(), 1);
 }
+
+#[test]
+fn excluded_projects_are_never_uploaded() {
+    let vault = tempfile::tempdir().unwrap();
+    let (store, _) = Store::init(vault.path(), PASS, fast()).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join(".ai-vault")).unwrap();
+    vault_core::env::set_config(&dir.path().join(".ai-vault"), "exclude_projects", serde_json::json!(["~/noise"])).unwrap();
+    let env = Env::detect(Some(dir.path())).unwrap();
+    assert_eq!(env.exclude_projects, ["~/noise"]);
+    let mut a = Device { env, state: State::default(), _dir: dir };
+    a.state = State::load(&a.env);
+    for p in ["noise", "keep"] {
+        fs::create_dir_all(a.project_dir(p)).unwrap();
+        a.write(&a.session_file(p, "s1"), &a.session_line(p, 1));
+    }
+    a.sync(&store);
+    let (ms, _) = store.read_all_manifests().unwrap();
+    let keys: Vec<_> = ms[0].entries.keys().collect();
+    assert!(keys.iter().any(|k| k.contains("keep")) && !keys.iter().any(|k| k.contains("noise")), "{keys:?}");
+}

@@ -23,6 +23,8 @@ pub struct Env {
     pub state_dir: PathBuf,
     /// Top-level `settings.json` keys that stay on each device (machine-specific commands/paths).
     pub local_keys: Vec<String>,
+    /// Projects (portable path prefixes like `~/.claude-mem/observer-sessions`) that are never uploaded.
+    pub exclude_projects: Vec<String>,
 }
 
 impl Env {
@@ -46,12 +48,32 @@ impl Env {
             .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
             .and_then(|v| v.get("local_keys")?.as_array().map(|a| a.iter().filter_map(|k| k.as_str().map(String::from)).collect()))
             .unwrap_or_else(|| DEFAULT_LOCAL_KEYS.iter().map(|k| k.to_string()).collect());
-        Ok(Env { state_dir, home, claude_dir, claude_json, codex_dir, desktop_cfg, local_keys })
+        let exclude_projects = read_config(&state_dir)
+            .get("exclude_projects")
+            .and_then(|v| v.as_array().map(|a| a.iter().filter_map(|k| k.as_str().map(String::from)).collect()))
+            .unwrap_or_default();
+        Ok(Env { state_dir, home, claude_dir, claude_json, codex_dir, desktop_cfg, local_keys, exclude_projects })
     }
 
     pub fn safety_root(&self) -> PathBuf {
         self.state_dir.join("safety-copies")
     }
+}
+
+/// `~/.ai-vault/config.json` as a JSON object (empty when missing or damaged).
+pub fn read_config(state_dir: &Path) -> serde_json::Value {
+    fs::read(state_dir.join("config.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+        .filter(|v| v.is_object())
+        .unwrap_or_else(|| serde_json::json!({}))
+}
+
+/// Set one key in the config file without disturbing the others.
+pub fn set_config(state_dir: &Path, key: &str, value: serde_json::Value) -> Result<()> {
+    let mut cfg = read_config(state_dir);
+    cfg[key] = value;
+    atomic_write(&state_dir.join("config.json"), serde_json::to_string_pretty(&cfg)?.as_bytes())
 }
 
 fn desktop_config_path(home: &Path, test: bool) -> PathBuf {

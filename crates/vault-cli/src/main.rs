@@ -69,6 +69,13 @@ enum Cmd {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Never upload a project (portable path or prefix, e.g. `~/.claude-mem/observer-sessions`). No argument lists them.
+    Exclude {
+        path: Option<String>,
+        /// Stop excluding it.
+        #[arg(long)]
+        remove: bool,
+    },
     /// Check for the common problems (retention purge, leaked secrets, running tools).
     Doctor,
     /// Change the vault passphrase (no data is re-encrypted).
@@ -123,9 +130,7 @@ fn saved_vault(env: &Env) -> Option<PathBuf> {
 }
 
 fn save_vault(env: &Env, p: &Path) -> Result<()> {
-    std::fs::create_dir_all(&env.state_dir)?;
-    std::fs::write(config_path(env), serde_json::json!({ "vault": p }).to_string())?;
-    Ok(())
+    vault_core::env::set_config(&env.state_dir, "vault", serde_json::json!(p))
 }
 
 fn keyring_entry(vault_id: &str) -> Option<keyring::Entry> {
@@ -371,6 +376,24 @@ fn run() -> Result<()> {
             println!("Context pack saved: {} ({} chars)", path.display(), pack.chars().count());
             if to_clipboard(&pack) {
                 println!("Copied to the clipboard - paste it as the first message of a new chat.");
+            }
+        }
+        Cmd::Exclude { path, remove } => {
+            let mut list = env.exclude_projects.clone();
+            if let Some(p) = path {
+                let p = p.trim().replace('\\', "/");
+                if *remove {
+                    list.retain(|x| *x != p);
+                } else if !list.contains(&p) {
+                    list.push(p);
+                }
+                vault_core::env::set_config(&env.state_dir, "exclude_projects", serde_json::json!(list))?;
+            }
+            if list.is_empty() {
+                println!("No projects excluded.");
+            }
+            for x in &list {
+                println!("{x}");
             }
         }
         Cmd::Doctor => {

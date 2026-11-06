@@ -3,7 +3,7 @@
 Carry your Claude Code, Codex and Claude Desktop sessions between computers. Everything in the vault is
 encrypted, and a plain file-sync tool (OneDrive, Google Drive, Dropbox, Syncthing, a USB stick) can't corrupt it.
 
-Status: **core + CLI working** (`avault`), 28 automated tests. The desktop UI is waiting on designs.
+Status: **core + CLI working** (`avault`), 29 automated tests. The desktop UI is waiting on designs.
 
 ```
 crates/vault-core   library: crypto, vault store, sync engine, archive/search, doctor (no UI)
@@ -19,6 +19,7 @@ avault doctor                                  # checks for the common gotchas
 avault sync --redact                           # strip API keys/tokens from logs before they leave this device
 avault sync --block-secrets                    # or refuse to upload logs that contain them
 avault verify --deep                           # integrity check of every vault file
+avault exclude "~/.claude-mem/observer-sessions"  # never upload a noisy project (plugin-generated sessions)
 avault remember                                # keep the passphrase in the OS credential store (daemon runs unattended)
 avault overview --json                         # devices / projects / totals as JSON for a UI
 avault devices                                 # who uses this vault (--remove <id> to forget one)
@@ -61,9 +62,12 @@ Project folders are matched by portable path (`~/code/app`), so `C:\Users\you\co
 Only structured `cwd` fields in logs are rewritten; message text is never touched.
 Logins (`.credentials.json`, `auth.json`) and `settings.local.json` never leave the device.
 
+## Tested on real data
+A read-only backup of a real `~/.claude` + `~/.codex` (3,177 files, ~1.3 GB of sessions) produced a 227 MB encrypted vault in 21 s; the next run took 0.4 s; `verify --deep` passed. 1,077 of 1,099 session logs came from a plugin's observer sessions, hence `avault exclude`.
+
 ## Roadmap (from the pain-point research)
 
-Done: OS keychain storage (`remember`), UI view-model API (`vault_core::overview`), key-level `settings.json` merge with per-machine keys, `--block-secrets`, consistent snapshots of live SQLite databases (Codex history) via SQLite's backup API, `verify`, `devices`, chunked streaming storage, always-on engine, `--redact`, Python-vault import, portable project ids, log merge, conflict detection, encryption of everything, recovery key, atomic writes,
+Done: project exclusion, OS keychain storage (`remember`), UI view-model API (`vault_core::overview`), key-level `settings.json` merge with per-machine keys, `--block-secrets`, consistent snapshots of live SQLite databases (Codex history) via SQLite's backup API, `verify`, `devices`, chunked streaming storage, always-on engine, `--redact`, Python-vault import, portable project ids, log merge, conflict detection, encryption of everything, recovery key, atomic writes,
 partial-line guard, MSIX desktop path, secret scan in `doctor`, retention warning.
 
 Next:
