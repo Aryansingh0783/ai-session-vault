@@ -3,6 +3,8 @@
 Carry your Claude Code, Codex and Claude Desktop sessions between computers. Everything in the vault is
 encrypted, and a plain file-sync tool (OneDrive, Google Drive, Dropbox, Syncthing, a USB stick) can't corrupt it.
 
+New here? Read the [guide](docs/GUIDE.md): what it does, a 5-minute start, how to read the app, tips and troubleshooting.
+
 Status: **core, CLI and app UI working** (`avault`, `avault ui`), 37 automated tests.
 
 ```
