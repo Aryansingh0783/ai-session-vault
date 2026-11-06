@@ -78,6 +78,14 @@ fn kek_from_passphrase(pass: &str, salt: &[u8], k: &KdfParams) -> Result<[u8; 32
     Ok(out)
 }
 
+pub fn kek_from_enrollment(raw: &[u8]) -> [u8; 32] {
+    blake3::derive_key("ai-session-vault v2 enrollment kek", raw)
+}
+
+pub fn kek_from_device(raw: &[u8]) -> [u8; 32] {
+    blake3::derive_key("ai-session-vault v2 device kek", raw)
+}
+
 fn kek_from_recovery(raw: &[u8]) -> [u8; 32] {
     blake3::derive_key("ai-session-vault v2 recovery kek", raw)
 }
@@ -111,12 +119,12 @@ fn new_master() -> [u8; 32] {
 }
 
 /// Human friendly recovery key, e.g. `ABCD-EFGH-...` (shown once at init).
-fn format_recovery(raw: &[u8]) -> String {
+pub fn format_code(raw: &[u8]) -> String {
     let s = BASE32_NOPAD.encode(raw);
     s.as_bytes().chunks(4).map(|c| std::str::from_utf8(c).unwrap()).collect::<Vec<_>>().join("-")
 }
 
-fn parse_recovery(s: &str) -> Result<Vec<u8>> {
+pub fn parse_code(s: &str) -> Result<Vec<u8>> {
     let clean: String = s.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>().to_uppercase();
     BASE32_NOPAD.decode(clean.as_bytes()).map_err(|_| anyhow!("that doesn't look like a recovery key"))
 }
@@ -138,7 +146,7 @@ impl Header {
         h.add_passphrase_slot(&master, passphrase)?;
         let mut rec = [0u8; 32];
         OsRng.fill_bytes(&mut rec);
-        let recovery = format_recovery(&rec);
+        let recovery = format_code(&rec);
         let kek = kek_from_recovery(&rec);
         h.slots.push(Slot { kind: "recovery".into(), salt: String::new(), wrapped: b64(&seal(&kek, b"slot:recovery", &master)) });
         rec.zeroize();
@@ -169,7 +177,7 @@ impl Header {
                 return Ok(Keys::from_master(m.try_into().map_err(|_| anyhow!("corrupt slot"))?));
             }
         }
-        if let Ok(raw) = parse_recovery(secret) {
+        if let Ok(raw) = parse_code(secret) {
             let kek = kek_from_recovery(&raw);
             for s in self.slots.iter().filter(|s| s.kind == "recovery") {
                 if let Ok(m) = open(&kek, b"slot:recovery", &unb64(&s.wrapped)?) {
@@ -196,13 +204,23 @@ impl Header {
         let kek = kek_from_recovery(&rec);
         self.slots.retain(|s| s.kind != "recovery");
         self.slots.push(Slot { kind: "recovery".into(), salt: String::new(), wrapped: b64(&seal(&kek, b"slot:recovery", &keys.master)) });
-        let out = format_recovery(&rec);
+        let out = format_code(&rec);
         rec.zeroize();
         out
     }
 }
 
 impl Keys {
+    /// Wrap the master key under another key (enrollment codes, device keys).
+    pub fn wrap_master(&self, kek: &[u8; 32], aad: &str) -> String {
+        b64(&seal(kek, aad.as_bytes(), &self.master))
+    }
+
+    pub fn from_wrapped(kek: &[u8; 32], aad: &str, wrapped: &str) -> Result<Keys> {
+        let m = open(kek, aad.as_bytes(), &unb64(wrapped)?)?;
+        Ok(Keys::from_master(m.try_into().map_err(|_| anyhow!("corrupt slot"))?))
+    }
+
     fn from_master(master: [u8; 32]) -> Keys {
         Keys {
             enc: blake3::derive_key("ai-session-vault v2 object encryption", &master),

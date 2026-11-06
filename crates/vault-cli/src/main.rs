@@ -95,11 +95,24 @@ enum Cmd {
     Forget,
     /// Summary of the vault for a UI: devices, projects (with local paths), totals. Use with --json.
     Overview,
+    /// Print a one-time code (valid 15 minutes) that lets another device join without the passphrase.
+    Enroll {
+        #[arg(long, default_value_t = 15)]
+        minutes: u64,
+    },
+    /// Join an existing vault with a code from `avault enroll` (no passphrase needed).
+    Join {
+        #[arg(long)]
+        code: String,
+    },
     /// List the devices using this vault, or forget one.
     Devices {
         /// Forget the device whose id starts with this (then run `gc`).
         #[arg(long)]
         remove: Option<String>,
+        /// Revoke a joined device's passphrase-free access (id from the "Joined devices" list).
+        #[arg(long)]
+        revoke: Option<String>,
     },
     /// Bring a vault made by the Python version (its `data` folder) into this one.
     ImportV1 { data_dir: PathBuf },
@@ -137,6 +150,19 @@ fn keyring_entry(vault_id: &str) -> Option<keyring::Entry> {
     keyring::Entry::new("ai-session-vault", vault_id).ok()
 }
 
+fn device_credential_path(env: &Env, vault_id: &str) -> PathBuf {
+    env.state_dir.join(format!("device-{vault_id}.key"))
+}
+
+fn load_device_credential(env: &Env, vault_id: &str) -> Option<String> {
+    if let Some(e) = keyring::Entry::new("ai-session-vault-device", vault_id).ok() {
+        if let Ok(p) = e.get_password() {
+            return Some(p);
+        }
+    }
+    std::fs::read_to_string(device_credential_path(env, vault_id)).ok().map(|s| s.trim().to_string())
+}
+
 fn prompt_secret(label: &str) -> Result<String> {
     if let Ok(p) = std::env::var("AI_VAULT_PASSPHRASE") {
         if !p.is_empty() {
@@ -161,6 +187,17 @@ fn open(cli: &Cli, env: &Env) -> Result<Store> {
     let vault_id = Store::read_header(&dir)?.vault_id;
     let env_pw_set = std::env::var("AI_VAULT_PASSPHRASE").map_or(false, |p| !p.is_empty());
     let from_keyring = if env_pw_set { None } else { keyring_entry(&vault_id).and_then(|e| e.get_password().ok()) };
+    if !env_pw_set && from_keyring.is_none() {
+        if let Some(cred) = load_device_credential(env, &vault_id) {
+            match Store::open_with_device(&dir, &cred) {
+                Ok(s) => {
+                    save_vault(env, &dir)?;
+                    return Ok(s);
+                }
+                Err(e) => eprintln!("(this device's stored access no longer works: {e}; ask for the passphrase)"),
+            }
+        }
+    }
     let store = match from_keyring {
         Some(pw) if !pw.is_empty() => Store::open(&dir, &pw).or_else(|_| {
             eprintln!("(the stored passphrase no longer works; ask for it again)");
@@ -254,6 +291,10 @@ fn new_passphrase() -> Result<String> {
         }
         println!("Didn't match.");
     }
+}
+
+fn gethostname_string() -> String {
+    std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).unwrap_or_else(|_| "this device".into())
 }
 
 fn main() {
@@ -470,6 +511,32 @@ fn run() -> Result<()> {
                 }
             }
         }
+        Cmd::Enroll { minutes } => {
+            let store = open(&cli, &env)?;
+            let code = store.create_enrollment(minutes * 60)?;
+            if cli.json {
+                println!("{}", serde_json::json!({ "code": code, "expires_in_minutes": minutes }));
+            } else {
+                println!("Enrollment code (valid {minutes} minutes, works once):\n\n    {code}\n\nOn the other device: avault join --vault \"{}\" --code {code}", store.root.display());
+            }
+        }
+        Cmd::Join { code } => {
+            let dir = vault_dir(&cli, &env)?;
+            if !Store::exists(&dir) {
+                bail!("no vault in {} - let the folder finish syncing first", dir.display());
+            }
+            let name = gethostname_string();
+            let (store, cred) = Store::join(&dir, code, &name)?;
+            let id = store.header.vault_id.clone();
+            let stored_in_keyring = keyring::Entry::new("ai-session-vault-device", &id).and_then(|e| e.set_password(&cred)).is_ok();
+            if !stored_in_keyring {
+                std::fs::create_dir_all(&env.state_dir)?;
+                std::fs::write(device_credential_path(&env, &id), &cred)?;
+            }
+            save_vault(&env, &dir)?;
+            println!("Joined. This device can now open the vault without the passphrase{}.", if stored_in_keyring { " (credential in the OS credential store)" } else { " (credential in ~/.ai-vault; protect that folder)" });
+            println!("Run `avault sync` to bring your sessions over.");
+        }
         Cmd::Remember => {
             let store = open(&cli, &env)?;
             let pw = prompt_secret("Passphrase to remember (re-enter; not the recovery key): ")?;
@@ -527,8 +594,21 @@ fn run() -> Result<()> {
                 std::process::exit(3);
             }
         }
-        Cmd::Devices { remove } => {
+        Cmd::Devices { remove, revoke } => {
             let store = open(&cli, &env)?;
+            if let Some(id) = revoke {
+                let slots = store.device_slots();
+                let hits: Vec<_> = slots.iter().filter(|s| s.id.starts_with(id.as_str())).collect();
+                match hits.as_slice() {
+                    [s] => {
+                        store.revoke_device_slot(&s.id)?;
+                        println!("Revoked access for '{}'.", s.name);
+                    }
+                    [] => bail!("no joined device with id starting '{id}'"),
+                    _ => bail!("several match; use more characters"),
+                }
+                return Ok(());
+            }
             if let Some(prefix) = remove {
                 let (ms, _) = store.read_all_manifests()?;
                 let hits: Vec<_> = ms.iter().filter(|m| m.device.id.starts_with(prefix.as_str())).collect();
@@ -546,6 +626,14 @@ fn run() -> Result<()> {
             let (ms, _) = store.read_all_manifests()?;
             if cli.json {
                 println!("{}", serde_json::to_string(&ms.iter().map(|m| serde_json::json!({"id": m.device.id, "name": m.device.name, "os": m.device.os, "updated": m.updated, "files": m.entries.len(), "this_device": m.device.id == me})).collect::<Vec<_>>())?);
+            }
+            let slots = store.device_slots();
+            if !cli.json && !slots.is_empty() {
+                println!("Joined devices (passphrase-free access):");
+                for sl in &slots {
+                    println!("  {}  {}  joined {}", sl.id, sl.name, sl.created);
+                }
+                println!();
             }
             for m in ms.iter().filter(|_| !cli.json) {
                 println!("{}  {} ({}){}  last sync {}  {} files", m.device.id, m.device.name, m.device.os, if m.device.id == me { "  <- this device" } else { "" }, m.updated, m.entries.len());

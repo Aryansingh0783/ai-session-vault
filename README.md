@@ -3,7 +3,7 @@
 Carry your Claude Code, Codex and Claude Desktop sessions between computers. Everything in the vault is
 encrypted, and a plain file-sync tool (OneDrive, Google Drive, Dropbox, Syncthing, a USB stick) can't corrupt it.
 
-Status: **core + CLI working** (`avault`), 30 automated tests. The desktop UI is waiting on designs.
+Status: **core + CLI working** (`avault`), 31 automated tests. The desktop UI is waiting on designs.
 
 ```
 crates/vault-core   library: crypto, vault store, sync engine, archive/search, doctor (no UI)
@@ -20,6 +20,8 @@ avault sync --redact                           # strip API keys/tokens from logs
 avault sync --block-secrets                    # or refuse to upload logs that contain them
 avault verify --deep                           # integrity check of every vault file
 avault exclude "~/.claude-mem/observer-sessions"  # never upload a noisy project (plugin-generated sessions)
+avault enroll                                  # one-time code so another device can join without the passphrase
+avault join --vault "<folder>" --code <code>   # on the new device
 avault remember                                # keep the passphrase in the OS credential store (daemon runs unattended)
 avault overview --json                         # devices / projects / totals as JSON for a UI
 avault devices                                 # who uses this vault (--remove <id> to forget one)
@@ -68,7 +70,7 @@ A read-only backup of a real `~/.claude` + `~/.codex` (3,177 files, ~1.3 GB of s
 
 ## Roadmap (from the pain-point research)
 
-Done: three-way merge of text files, project exclusion, OS keychain storage (`remember`), UI view-model API (`vault_core::overview`), key-level `settings.json` merge with per-machine keys, `--block-secrets`, consistent snapshots of live SQLite databases (Codex history) via SQLite's backup API, `verify`, `devices`, chunked streaming storage, always-on engine, `--redact`, Python-vault import, portable project ids, log merge, conflict detection, encryption of everything, recovery key, atomic writes,
+Done: device enrollment with revocable access (`enroll` / `join` / `devices --revoke`), three-way merge of text files, project exclusion, OS keychain storage (`remember`), UI view-model API (`vault_core::overview`), key-level `settings.json` merge with per-machine keys, `--block-secrets`, consistent snapshots of live SQLite databases (Codex history) via SQLite's backup API, `verify`, `devices`, chunked streaming storage, always-on engine, `--redact`, Python-vault import, portable project ids, log merge, conflict detection, encryption of everything, recovery key, atomic writes,
 partial-line guard, MSIX desktop path, secret scan in `doctor`, retention warning.
 
 Next:
@@ -76,7 +78,7 @@ Next:
 2. Streaming merge for logs over 2 GiB (smaller logs merge in memory; larger ones are skipped and reported). Content-defined chunking if edits-in-the-middle ever matter.
 4. Run the engine as an OS service / tray item (the engine itself exists: `avault daemon`).
 6. Per-OS layers for `settings.json` (key-level merge and per-machine keys already exist).
-7. Device enrollment code (a second device joins without typing the passphrase).
+7. Full key rotation (re-encrypt) so a revoked device that already copied the key is locked out too.
 8. Full-text index (tantivy) and neutral session schema for Codex rollouts.
 9. `relocate` command and a per-Claude-version compatibility self-test for the project-folder encoding.
 10. Import v1 settings/MCP (their encrypted fields) - needs scrypt + AES-GCM decrypt.

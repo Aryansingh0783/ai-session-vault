@@ -448,3 +448,32 @@ fn text_edits_to_different_lines_are_merged_three_way() {
     let again = b.sync(&store);
     assert_eq!((again.uploaded, again.downloaded, again.merged), (0, 0, 0), "{again:?}");
 }
+
+#[test]
+fn a_device_can_join_with_a_one_time_code_and_be_revoked() {
+    let vault = tempfile::tempdir().unwrap();
+    let (store, _) = Store::init(vault.path(), PASS, fast()).unwrap();
+    let secret_id = store.put(b"top secret session").unwrap();
+
+    let code = store.create_enrollment(600).unwrap();
+    let (joined, cred) = Store::join(vault.path(), &code, "laptop").unwrap();
+    assert_eq!(joined.get(&secret_id).unwrap(), b"top secret session");
+    // The code works once.
+    assert!(Store::join(vault.path(), &code, "other").is_err());
+    // Later the device opens the vault with just its credential - no passphrase.
+    let again = Store::open_with_device(vault.path(), &cred).unwrap();
+    assert_eq!(again.get(&secret_id).unwrap(), b"top secret session");
+    assert!(Store::open_with_device(vault.path(), "deadbeef:AAAA-AAAA").is_err());
+    assert_eq!(store.device_slots().len(), 1);
+
+    // Revoking removes its access slot.
+    let slot = store.device_slots().remove(0);
+    assert_eq!(slot.name, "laptop");
+    store.revoke_device_slot(&slot.id).unwrap();
+    assert!(Store::open_with_device(vault.path(), &cred).is_err());
+
+    // Expired codes are refused.
+    let stale = store.create_enrollment(0).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    assert!(Store::join(vault.path(), &stale, "late").err().unwrap().to_string().contains("expired"));
+}
