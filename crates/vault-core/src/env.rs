@@ -112,6 +112,9 @@ pub struct State {
     pub device_id: String,
     #[serde(default)]
     pub files: BTreeMap<String, FileState>,
+    /// Memo of each Claude Code project dir's detected working directory (avoids re-reading logs).
+    #[serde(default)]
+    pub project_cwd: BTreeMap<String, String>,
 }
 
 impl State {

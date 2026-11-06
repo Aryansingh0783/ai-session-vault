@@ -11,12 +11,15 @@
 use crate::env::{running_tools, wildcard, Env, FileState, State};
 use crate::jsonl::{self, Relation};
 use crate::paths::{encode_project, project_key, to_local, to_portable, PathMap};
-use crate::store::{Entry, Kind, Store};
+use crate::store::{ChunkWriter, Entry, HashWriter, Kind, Store};
 use crate::util::{atomic_write, mtime_ms, now_iso, stamp};
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::fs;
 use std::path::{Component as PathComp, Path, PathBuf};
 use walkdir::WalkDir;
@@ -35,7 +38,8 @@ const EXCLUDE: &[&str] = &[
     ".credentials.json", "auth.json", ".DS_Store", "Thumbs.db", "desktop.ini",
     "settings.local.json", "_vault_meta.json",
 ];
-const MAX_FILE: u64 = 512 * 1024 * 1024;
+/// Logs are merged in memory; plain files stream and have no size limit.
+const LOG_MEM_CAP: u64 = 2 * 1024 * 1024 * 1024;
 const TOL_MS: i64 = 2000;
 const MCP: &str = "claude-code/mcp_servers.json";
 const DESKTOP: &str = "claude-desktop/claude_desktop_config.json";
@@ -69,22 +73,43 @@ impl Component {
     }
 }
 
-#[derive(Clone, Debug)]
+/// Optional callbacks for a UI or daemon: progress reporting and cooperative cancellation.
+#[derive(Clone, Default)]
+pub struct Hooks {
+    pub progress: Option<Arc<dyn Fn(&str, usize, usize) + Send + Sync>>,
+    pub cancel: Option<Arc<AtomicBool>>,
+}
+
+impl Hooks {
+    pub fn cancelled(&self) -> bool {
+        self.cancel.as_ref().map_or(false, |c| c.load(Ordering::Relaxed))
+    }
+    pub fn progress(&self, phase: &str, done: usize, total: usize) {
+        if let Some(p) = &self.progress {
+            p(phase, done, total);
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct Options {
     pub components: Vec<Component>,
     pub maps: Vec<PathMap>,
     pub dry_run: bool,
     /// Replace API keys/tokens in session logs before they leave this device.
     pub redact: bool,
+    pub hooks: Hooks,
+    /// When set, only these local files are examined (incremental backup after file-watch events).
+    pub only_paths: Option<Arc<HashSet<PathBuf>>>,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { components: Component::ALL.to_vec(), maps: vec![], dry_run: false, redact: false }
+        Options { components: Component::ALL.to_vec(), maps: vec![], dry_run: false, redact: false, hooks: Hooks::default(), only_paths: None }
     }
 }
 
-#[derive(Default, Debug, Serialize)]
+#[derive(Default, Debug, Clone, Serialize)]
 pub struct Report {
     pub uploaded: usize,
     pub downloaded: usize,
@@ -98,6 +123,9 @@ pub struct Report {
     pub mcp_added: Vec<String>,
     pub missing_projects: Vec<String>,
     pub skipped_large: Vec<String>,
+    pub bytes_uploaded: u64,
+    pub bytes_downloaded: u64,
+    pub cancelled: bool,
 }
 
 impl Report {
@@ -107,6 +135,9 @@ impl Report {
         self.merged += o.merged;
         self.unchanged += o.unchanged;
         self.safety_copies += o.safety_copies;
+        self.bytes_uploaded += o.bytes_uploaded;
+        self.bytes_downloaded += o.bytes_downloaded;
+        self.cancelled |= o.cancelled;
         for (a, b) in [
             (&mut self.conflicts, o.conflicts), (&mut self.failed, o.failed), (&mut self.busy, o.busy),
             (&mut self.warnings, o.warnings), (&mut self.mcp_added, o.mcp_added),
@@ -212,7 +243,7 @@ fn safe_rel(rel: &str) -> Option<PathBuf> {
     Some(p)
 }
 
-fn scan_local(env: &Env, comps: &[Component]) -> (Vec<Item>, BTreeMap<String, String>) {
+fn scan_local(env: &Env, comps: &[Component], state: &mut State) -> (Vec<Item>, BTreeMap<String, String>) {
     let mut items = vec![];
     let mut projects = BTreeMap::new();
     let mut push = |logical: String, local: PathBuf| {
@@ -229,7 +260,15 @@ fn scan_local(env: &Env, comps: &[Component]) -> (Vec<Item>, BTreeMap<String, St
             dirs.sort();
             for pdir in dirs {
                 let name = pdir.file_name().unwrap().to_string_lossy().into_owned();
-                let (key, value) = match detect_cwd(&pdir) {
+                let cached = state.project_cwd.get(&name).cloned();
+                let cwd = cached.or_else(|| {
+                    let d = detect_cwd(&pdir);
+                    if let Some(c) = &d {
+                        state.project_cwd.insert(name.clone(), c.clone());
+                    }
+                    d
+                });
+                let (key, value) = match cwd {
                     Some(cwd) => {
                         let portable = to_portable(&cwd, &env.home);
                         (project_key(&portable), portable)
@@ -315,18 +354,66 @@ fn mcp_extract(raw: &[u8]) -> Option<Vec<u8>> {
     serde_json::to_vec_pretty(&Value::Object(m.clone())).ok()
 }
 
-/// Local file -> the bytes that go into the vault (portable form). `None` = nothing to store.
-fn prepare(item: &Item, env: &Env, redact: bool) -> Result<Option<Vec<u8>>> {
-    let raw = fs::read(&item.local)?;
+/// Stream a local file's *portable* form (what goes into the vault) into `out`.
+/// Returns false when there is nothing to store. Live logs: a trailing partial line is never shipped.
+fn prepare_to(item: &Item, env: &Env, redact: bool, out: &mut dyn Write) -> Result<bool> {
     if item.logical == MCP {
-        return Ok(mcp_extract(&raw));
+        return match mcp_extract(&fs::read(&item.local)?) {
+            Some(b) => {
+                out.write_all(&b)?;
+                Ok(true)
+            }
+            None => Ok(false),
+        };
     }
+    let f = fs::File::open(&item.local)?;
     if item.kind == Kind::Log {
-        let whole = jsonl::complete_lines(&raw);
-        let t = jsonl::transform(whole, &|p| to_portable(p, &env.home));
-        return Ok(Some(if redact { crate::secrets::redact(&t) } else { t }));
+        let mut r = BufReader::with_capacity(256 * 1024, f);
+        let mut line = Vec::new();
+        loop {
+            line.clear();
+            if r.read_until(b'\n', &mut line)? == 0 || !line.ends_with(b"\n") {
+                break;
+            }
+            let t = jsonl::transform(&line, &|p| to_portable(p, &env.home));
+            out.write_all(&if redact { crate::secrets::redact(&t) } else { t })?;
+        }
+    } else {
+        std::io::copy(&mut BufReader::with_capacity(256 * 1024, f), out)?;
     }
-    Ok(Some(raw))
+    Ok(true)
+}
+
+fn prepare_mem(item: &Item, env: &Env, redact: bool) -> Result<Option<Vec<u8>>> {
+    let mut v = Vec::new();
+    Ok(prepare_to(item, env, redact, &mut v)?.then_some(v))
+}
+
+/// Write an entry's content to `path` through a temp file, verifying it before it replaces anything.
+fn install_stream(store: &Store, e: &Entry, path: &Path, safety: &mut SafetyCopies) -> Result<()> {
+    if let Some(d) = path.parent() {
+        fs::create_dir_all(d)?;
+    }
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".vaulttmp");
+    let tmp = PathBuf::from(tmp);
+    let r = (|| -> Result<()> {
+        let mut w = BufWriter::new(fs::File::create(&tmp)?);
+        store.read_to(e, &mut w)?;
+        w.flush()?;
+        Ok(())
+    })();
+    if let Err(err) = r {
+        let _ = fs::remove_file(&tmp);
+        return Err(err);
+    }
+    safety.save(path)?;
+    if let Err(err) = fs::rename(&tmp, path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(err.into());
+    }
+    set_mtime(path, e.mtime_ms);
+    Ok(())
 }
 
 fn set_mtime(p: &Path, ms: i64) {
@@ -394,7 +481,10 @@ pub fn lock(env: &Env) -> Result<RunLock> {
 // ===================================================================== backup
 pub fn backup(env: &Env, store: &Store, state: &mut State, opts: &Options, log: Log) -> Result<Report> {
     let mut rep = Report::default();
-    let (items, projects) = scan_local(env, &opts.components);
+    let (mut items, projects) = scan_local(env, &opts.components, state);
+    if let Some(only) = &opts.only_paths {
+        items.retain(|i| only.contains(&i.local));
+    }
     let mut manifest = store.read_manifest(&state.device_id)?.unwrap_or_else(|| Store::new_manifest(state.device_info(env)));
     manifest.device = state.device_info(env);
     let mut changed = false;
@@ -404,12 +494,19 @@ pub fn backup(env: &Env, store: &Store, state: &mut State, opts: &Options, log: 
             changed = true;
         }
     }
-    for item in &items {
+    let total = items.len();
+    let mut since_checkpoint = 0;
+    for (i, item) in items.iter().enumerate() {
+        if opts.hooks.cancelled() {
+            rep.cancelled = true;
+            break;
+        }
+        opts.hooks.progress("backup", i, total);
         let md = match fs::metadata(&item.local) {
             Ok(m) => m,
             Err(_) => continue,
         };
-        if md.len() > MAX_FILE {
+        if item.kind == Kind::Log && md.len() > LOG_MEM_CAP {
             rep.skipped_large.push(item.local.display().to_string());
             continue;
         }
@@ -425,15 +522,33 @@ pub fn backup(env: &Env, store: &Store, state: &mut State, opts: &Options, log: 
                 continue;
             }
         }
-        let content = match prepare(item, env, opts.redact) {
-            Ok(Some(c)) => c,
+        // Stream: read -> portable form -> 1 MiB chunks -> encrypt. Memory stays bounded; chunks the
+        // vault already has (e.g. the unchanged head of a growing log) are not uploaded again.
+        let res: Result<Option<(String, Vec<String>, u64, u64)>> = (|| {
+            if opts.dry_run {
+                let mut hw = HashWriter::new(store);
+                if !prepare_to(item, env, opts.redact, &mut hw)? {
+                    return Ok(None);
+                }
+                let (h, sz) = hw.finish();
+                Ok(Some((h, vec![], sz, 0)))
+            } else {
+                let mut cw = ChunkWriter::new(store);
+                if !prepare_to(item, env, opts.redact, &mut cw)? {
+                    return Ok(None);
+                }
+                let st = cw.finish()?;
+                Ok(Some((st.hash, st.chunks, st.size, st.new_bytes)))
+            }
+        })();
+        let (id, chunks, out_size, new_bytes) = match res {
+            Ok(Some(x)) => x,
             Ok(None) => continue,
             Err(e) => {
                 rep.failed.push(format!("{}: {e}", item.local.display()));
                 continue;
             }
         };
-        let id = store.keys.object_id(&content);
         let fs_entry = state.files.entry(item.logical.clone()).or_default();
         fs_entry.size = size;
         fs_entry.mtime_ms = mt;
@@ -447,19 +562,26 @@ pub fn backup(env: &Env, store: &Store, state: &mut State, opts: &Options, log: 
             rep.uploaded += 1;
             continue;
         }
-        if let Err(e) = store.put(&content) {
-            rep.failed.push(format!("{}: {e}", item.logical));
-            continue;
-        }
         if item.kind == Kind::File {
             fs_entry.synced_hash = Some(id.clone());
         } else if !fs_entry.seen.contains(&id) {
             fs_entry.seen.push(id.clone());
         }
-        manifest.entries.insert(item.logical.clone(), Entry { kind: item.kind, size: content.len() as u64, mtime_ms: mt, hash: id });
+        manifest.entries.insert(item.logical.clone(), Entry { kind: item.kind, size: out_size, mtime_ms: mt, hash: id, chunks });
         changed = true;
         rep.uploaded += 1;
+        rep.bytes_uploaded += new_bytes;
+        since_checkpoint += 1;
+        if since_checkpoint >= 100 {
+            // Save progress so an interrupted run resumes instead of starting over.
+            manifest.seq += 1;
+            manifest.updated = now_iso();
+            store.write_manifest(&manifest)?;
+            state.save(env)?;
+            since_checkpoint = 0;
+        }
     }
+    opts.hooks.progress("backup", total, total);
     if changed && !opts.dry_run {
         manifest.seq += 1;
         manifest.updated = now_iso();
@@ -480,8 +602,11 @@ fn local_hash_of(item: &Item, env: &Env, store: &Store, state: &mut State, redac
             return Some((c.local_hash.clone(), mt));
         }
     }
-    let content = prepare(item, env, redact).ok()??;
-    let id = store.keys.object_id(&content);
+    let mut hw = HashWriter::new(store);
+    if !prepare_to(item, env, redact, &mut hw).ok()? {
+        return None;
+    }
+    let (id, _) = hw.finish();
     let e = state.files.entry(item.logical.clone()).or_insert_with(FileState::default);
     e.size = size;
     e.mtime_ms = mt;
@@ -520,7 +645,13 @@ pub fn restore(env: &Env, store: &Store, state: &mut State, opts: &Options, log:
     let mut missing = BTreeSet::new();
     let mut mcp_blobs: Vec<&Entry> = vec![];
 
-    for (logical, entries) in &cands {
+    let total = cands.len();
+    for (idx, (logical, entries)) in cands.iter().enumerate() {
+        if opts.hooks.cancelled() {
+            rep.cancelled = true;
+            break;
+        }
+        opts.hooks.progress("restore", idx, total);
         let all: Vec<&Entry> = entries.iter().map(|(_, e)| *e).collect();
         // This device's own manifest entry is only what it last uploaded; prefer what other devices have.
         let others: Vec<&Entry> = entries.iter().filter(|(d, _)| *d != state.device_id).map(|(_, e)| *e).collect();
@@ -567,24 +698,29 @@ fn restore_log(env: &Env, store: &Store, state: &mut State, item: &Item, entries
     let mut remote: Vec<&Entry> = entries.to_vec();
     remote.sort_by_key(|e| e.mtime_ms);
     let seen: Vec<String> = state.files.get(&item.logical).map(|f| f.seen.clone()).unwrap_or_default();
-    let mut distinct: Vec<&str> = vec![];
+    let mut distinct: Vec<&Entry> = vec![];
     for e in &remote {
-        if !distinct.contains(&e.hash.as_str()) {
-            distinct.push(&e.hash);
+        if !distinct.iter().any(|d| d.hash == e.hash) {
+            distinct.push(e);
         }
     }
-    if local_hash.is_some() && distinct.iter().all(|h| Some(*h) == local_hash || seen.iter().any(|s| s == h)) {
+    if local_hash.is_some() && distinct.iter().all(|e| Some(e.hash.as_str()) == local_hash || seen.iter().any(|s| *s == e.hash)) {
         rep.unchanged += 1;
         return Ok(());
     }
-    let mut cur: Vec<u8> = if item.local.is_file() { prepare(item, env, opts.redact)?.unwrap_or_default() } else { vec![] };
+    if distinct.iter().any(|e| e.size > LOG_MEM_CAP) {
+        rep.skipped_large.push(item.logical.clone());
+        return Ok(());
+    }
+    let mut cur: Vec<u8> = if item.local.is_file() { prepare_mem(item, env, opts.redact)?.unwrap_or_default() } else { vec![] };
     let before = cur.clone();
     let mut merged = false;
-    for h in &distinct {
-        if local_hash == Some(*h) {
+    for e in &distinct {
+        if local_hash == Some(e.hash.as_str()) {
             continue;
         }
-        let r = store.get(h)?;
+        let r = store.read_all(e)?;
+        rep.bytes_downloaded += r.len() as u64;
         match jsonl::relation(&cur, &r) {
             Relation::Same | Relation::BBehind => {}
             Relation::ABehind => cur = r,
@@ -613,7 +749,7 @@ fn restore_log(env: &Env, store: &Store, state: &mut State, item: &Item, entries
             f.size = md.len();
             f.mtime_ms = mtime_ms(&md);
         }
-        f.seen = distinct.iter().map(|s| s.to_string()).chain(seen).take(16).collect();
+        f.seen = distinct.iter().map(|e| e.hash.clone()).chain(seen).take(16).collect();
     }
     Ok(())
 }
@@ -622,9 +758,9 @@ fn restore_log(env: &Env, store: &Store, state: &mut State, item: &Item, entries
 fn restore_file(store: &Store, state: &mut State, item: &Item, entries: &[&Entry], local: Option<&(String, i64)>, opts: &Options, safety: &mut SafetyCopies, rep: &mut Report, log: Log) -> Result<()> {
     let winner = entries.iter().max_by(|a, b| a.mtime_ms.cmp(&b.mtime_ms).then(a.hash.cmp(&b.hash))).unwrap();
     let base = state.files.get(&item.logical).and_then(|f| f.synced_hash.clone());
-    let install = |state: &mut State, safety: &mut SafetyCopies| -> Result<()> {
-        let data = store.get(&winner.hash)?;
-        write_local(&item.local, &data, Some(winner.mtime_ms), safety)?;
+    let install = |state: &mut State, safety: &mut SafetyCopies, rep: &mut Report| -> Result<()> {
+        install_stream(store, winner, &item.local, safety)?;
+        rep.bytes_downloaded += winner.size;
         let md = fs::metadata(&item.local)?;
         let f = state.files.entry(item.logical.clone()).or_default();
         f.size = md.len();
@@ -638,7 +774,7 @@ fn restore_file(store: &Store, state: &mut State, item: &Item, entries: &[&Entry
             if opts.dry_run {
                 log(&format!("  would create {}", item.local.display()));
             } else {
-                install(state, safety)?;
+                install(state, safety, rep)?;
             }
             rep.downloaded += 1;
         }
@@ -659,7 +795,7 @@ fn restore_file(store: &Store, state: &mut State, item: &Item, entries: &[&Entry
                 if opts.dry_run {
                     log(&format!("  would update {}", item.local.display()));
                 } else {
-                    install(state, safety)?;
+                    install(state, safety, rep)?;
                 }
                 rep.downloaded += 1;
             } else {
@@ -683,7 +819,7 @@ fn restore_mcp(env: &Env, store: &Store, entries: &[&Entry], opts: &Options, saf
     sorted.sort_by_key(|e| std::cmp::Reverse(e.mtime_ms));
     let mut servers = serde_json::Map::new();
     for e in sorted {
-        if let Value::Object(o) = serde_json::from_slice::<Value>(&store.get(&e.hash)?)? {
+        if let Value::Object(o) = serde_json::from_slice::<Value>(&store.read_all(e)?)? {
             for (k, v) in o {
                 servers.entry(k).or_insert(v);
             }

@@ -76,13 +76,20 @@ enum Cmd {
     Gc,
     /// Bring a vault made by the Python version (its `data` folder) into this one.
     ImportV1 { data_dir: PathBuf },
-    /// Keep syncing in the background, waiting for sessions to go idle first.
-    Watch {
+    /// Run the always-on engine: watches your sessions and the vault, syncs only what changed.
+    #[command(alias = "watch")]
+    Daemon {
         #[command(flatten)]
         args: SyncArgs,
-        /// Seconds between syncs.
+        /// Seconds a session must be quiet before it is synced.
+        #[arg(long, default_value_t = 8)]
+        quiet: u64,
+        /// Do a full sync at least this often (seconds), even without file events.
         #[arg(long, default_value_t = 300)]
-        interval: u64,
+        full_every: u64,
+        /// Poll only (no file watching).
+        #[arg(long)]
+        no_watch: bool,
     },
 }
 
@@ -133,7 +140,7 @@ fn options(a: &SyncArgs) -> Result<Options> {
         Some(s) => s.split(',').map(|c| Component::parse(c.trim())).collect::<Result<Vec<_>>>()?,
         None => Component::ALL.to_vec(),
     };
-    Ok(Options { components, maps: parse_maps(&a.maps)?, dry_run: a.dry_run, redact: a.redact })
+    Ok(Options { components, maps: parse_maps(&a.maps)?, dry_run: a.dry_run, redact: a.redact, ..Options::default() })
 }
 
 fn print_report(r: &Report, json: bool) {
@@ -168,16 +175,6 @@ fn print_report(r: &Report, json: bool) {
             }
         }
     }
-}
-
-/// Was any session log written in the last `secs` seconds? (A live session: don't sync mid-write.)
-fn recently_active(env: &Env, secs: u64) -> bool {
-    let now = std::time::SystemTime::now();
-    [env.claude_dir.join("projects"), env.codex_dir.join("sessions")].iter().any(|root| {
-        walkdir::WalkDir::new(root).into_iter().flatten().filter(|e| e.file_type().is_file()).any(|e| {
-            e.metadata().ok().and_then(|m| m.modified().ok()).and_then(|t| now.duration_since(t).ok()).map_or(false, |d| d.as_secs() < secs)
-        })
-    })
 }
 
 fn to_clipboard(text: &str) -> bool {
@@ -377,24 +374,43 @@ fn run() -> Result<()> {
             println!("Imported {} file(s) from {} project(s). Run `avault sync` to distribute them.", r.files, r.projects);
             println!("Not imported (v1 encrypted fields inside them): {}. Sync those fresh from the device that has them.", r.skipped.join(", "));
         }
-        Cmd::Watch { args, interval } => {
+        Cmd::Daemon { args, quiet, full_every, no_watch } => {
+            use vault_core::engine::{Engine, EngineConfig, Event};
             let store = open(&cli, &env)?;
-            let opts = options(args)?;
-            let mut state = State::load(&env);
-            println!("Watching. Syncing every {interval}s when sessions are idle. Ctrl+C to stop.");
-            loop {
-                if recently_active(&env, 15) {
-                    println!("  sessions active, waiting...");
-                    std::thread::sleep(std::time::Duration::from_secs(15));
+            let o = options(args)?;
+            let cfg = EngineConfig {
+                components: o.components,
+                maps: o.maps,
+                redact: o.redact,
+                quiet: std::time::Duration::from_secs(*quiet),
+                full_sync_every: std::time::Duration::from_secs(*full_every),
+                watch: !*no_watch,
+            };
+            let engine = Engine::start(env.clone(), store, cfg)?;
+            if !cli.json {
+                println!("Engine running (Ctrl+C to stop). Syncs {}s after a session goes quiet.", quiet);
+            }
+            let mut last_progress = 0usize;
+            while let Ok(ev) = engine.events.recv() {
+                if cli.json {
+                    println!("{}", serde_json::to_string(&ev)?);
                     continue;
                 }
-                let _lock = sync::lock(&env)?;
-                match sync::sync_unlocked(&env, &store, &mut state, &opts, &log) {
-                    Ok(r) => print_report(&r, cli.json),
-                    Err(e) => eprintln!("  sync failed: {e:#}"),
+                match ev {
+                    Event::Status(s) => println!("[{:?}] {} pending", s.phase, s.pending_changes),
+                    Event::Progress { phase, done, total } => {
+                        if total > 0 && (done == total || done >= last_progress + 200 || done == 0) {
+                            println!("  {phase}: {done}/{total}");
+                        }
+                        last_progress = if done == total { 0 } else { done };
+                    }
+                    Event::SyncFinished { full, report } => {
+                        println!("{} sync done:", if full { "full" } else { "incremental" });
+                        print_report(&report, false);
+                    }
+                    Event::Error { message } => eprintln!("  error (will retry): {message}"),
+                    Event::Log { message } => println!("{message}"),
                 }
-                drop(_lock);
-                std::thread::sleep(std::time::Duration::from_secs(*interval));
             }
         }
         Cmd::Gc => {

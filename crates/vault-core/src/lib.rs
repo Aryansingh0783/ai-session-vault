@@ -4,6 +4,7 @@
 pub mod archive;
 pub mod crypto;
 pub mod doctor;
+pub mod engine;
 pub mod env;
 pub mod jsonl;
 pub mod legacy;

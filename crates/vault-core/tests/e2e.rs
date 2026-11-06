@@ -192,3 +192,85 @@ fn imports_a_python_v1_vault() {
     let got = fs::read_to_string(b.session_file("app", "old")).unwrap();
     assert!(got.contains("from python") && got.contains(&b.project_dir("app").to_string_lossy().replace('\\', "\\\\")), "{got}");
 }
+
+#[test]
+fn growing_log_uploads_only_its_new_tail_and_big_files_roundtrip() {
+    let vault = tempfile::tempdir().unwrap();
+    let (store, _) = Store::init(vault.path(), PASS, fast()).unwrap();
+    let mut a = Device::new();
+    fs::create_dir_all(a.project_dir("app")).unwrap();
+    // ~6 MiB session log of incompressible-ish lines.
+    let mut log = String::new();
+    let mut n = 0u32;
+    while log.len() < 6 * 1024 * 1024 {
+        n += 1;
+        log.push_str(&a.session_line("app", n).replace("msg", &format!("{:x}{:x}", n.wrapping_mul(2654435761), n.wrapping_mul(40503))));
+    }
+    let path = a.session_file("app", "big");
+    a.write(&path, &log);
+    // A 5 MiB plain file (multi-chunk, streamed on restore).
+    let blob: Vec<u8> = (0..5 * 1024 * 1024u32).map(|i| (i.wrapping_mul(2654435761) >> 13) as u8).collect();
+    fs::create_dir_all(a.env.claude_dir.join("rules")).unwrap();
+    fs::write(a.env.claude_dir.join("rules").join("blob.bin"), &blob).unwrap();
+    let r1 = a.sync(&store);
+    assert!(r1.bytes_uploaded > 5 * 1024 * 1024, "first upload sends everything: {r1:?}");
+
+    // Append one line: only the changed tail chunk(s) should be new.
+    let mut f = fs::OpenOptions::new().append(true).open(&path).unwrap();
+    use std::io::Write;
+    f.write_all(a.session_line("app", 999_999).as_bytes()).unwrap();
+    drop(f);
+    let r2 = a.sync(&store);
+    assert_eq!(r2.uploaded, 1, "{r2:?}");
+    assert!(r2.bytes_uploaded <= 1024 * 1024, "only the tail chunk uploads, got {} bytes", r2.bytes_uploaded);
+
+    // Another device receives the big log intact (verified chunk by chunk).
+    let mut b = Device::new();
+    fs::create_dir_all(b.project_dir("app")).unwrap();
+    let store_b = Store::open(vault.path(), PASS).unwrap();
+    let rb = b.sync(&store_b);
+    assert!(rb.failed.is_empty(), "{rb:?}");
+    let got = fs::read_to_string(b.session_file("app", "big")).unwrap();
+    assert!(got.contains("msg 999999") || got.contains(":\"msg 999999\""), "tail line missing");
+    assert_eq!(got.lines().count(), n as usize + 1);
+}
+
+#[test]
+fn engine_syncs_automatically_between_two_devices() {
+    use std::time::{Duration, Instant};
+    use vault_core::engine::{Engine, EngineConfig, Event};
+    let vault = tempfile::tempdir().unwrap();
+    let (store, _) = Store::init(vault.path(), PASS, fast()).unwrap();
+    let a = Device::new();
+    let b = Device::new();
+    fs::create_dir_all(a.project_dir("app")).unwrap();
+    fs::create_dir_all(b.project_dir("app")).unwrap();
+    fs::create_dir_all(a.env.claude_dir.join("projects")).unwrap();
+    fs::create_dir_all(b.env.claude_dir.join("projects")).unwrap();
+    let cfg = EngineConfig { quiet: Duration::from_millis(300), full_sync_every: Duration::from_secs(3600), ..Default::default() };
+    let ea = Engine::start(a.env.clone(), store, cfg.clone()).unwrap();
+    let eb = Engine::start(b.env.clone(), Store::open(vault.path(), PASS).unwrap(), cfg).unwrap();
+
+    let wait_finished = |e: &Engine, secs: u64| {
+        let end = Instant::now() + Duration::from_secs(secs);
+        while Instant::now() < end {
+            if let Ok(Event::SyncFinished { .. }) = e.events.recv_timeout(Duration::from_millis(200)) {
+                return true;
+            }
+        }
+        false
+    };
+    assert!(wait_finished(&ea, 20) && wait_finished(&eb, 20), "initial syncs");
+
+    // A new session appears on A; B should receive it without anyone pressing a button.
+    a.write(&a.session_file("app", "live"), &a.session_line("app", 7));
+    let target = b.session_file("app", "live");
+    let end = Instant::now() + Duration::from_secs(40);
+    while !target.exists() && Instant::now() < end {
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    assert!(target.exists(), "B never received the session");
+    assert!(fs::read_to_string(&target).unwrap().contains("msg 7"));
+    ea.shutdown();
+    eb.shutdown();
+}

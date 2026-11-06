@@ -15,7 +15,11 @@ use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+
+/// Files are stored as fixed 1 MiB chunks, so a growing log only uploads its new tail.
+pub const CHUNK: usize = 1024 * 1024;
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -31,8 +35,11 @@ pub struct Entry {
     pub kind: Kind,
     pub size: u64,
     pub mtime_ms: i64,
-    /// Object id of this version's (portable) content.
+    /// Keyed hash of this version's whole (portable) content.
     pub hash: String,
+    /// Chunk object ids when the content spans more than one chunk (empty = a single object named `hash`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub chunks: Vec<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
@@ -119,6 +126,31 @@ impl Store {
         Ok(data)
     }
 
+    /// Chunk ids that make up an entry's content, in order.
+    pub fn chunk_ids(e: &Entry) -> Vec<&str> {
+        if e.chunks.is_empty() { vec![e.hash.as_str()] } else { e.chunks.iter().map(|c| c.as_str()).collect() }
+    }
+
+    /// Stream an entry's content into `out`, verifying every chunk and the whole-file hash.
+    pub fn read_to(&self, e: &Entry, out: &mut dyn Write) -> Result<()> {
+        let mut h = self.keys.hasher();
+        for id in Self::chunk_ids(e) {
+            let data = self.get(id)?;
+            h.update(&data);
+            out.write_all(&data)?;
+        }
+        if h.finalize().to_hex().as_str() != e.hash {
+            bail!("file failed its integrity check");
+        }
+        Ok(())
+    }
+
+    pub fn read_all(&self, e: &Entry) -> Result<Vec<u8>> {
+        let mut v = Vec::with_capacity(e.size as usize);
+        self.read_to(e, &mut v)?;
+        Ok(v)
+    }
+
     fn manifest_path(&self, device_id: &str) -> PathBuf {
         self.root.join("devices").join(device_id).join("manifest")
     }
@@ -173,8 +205,10 @@ impl Store {
 
     /// Delete objects no manifest references. Returns (count, bytes).
     pub fn gc(&self, manifests: &[Manifest]) -> Result<(usize, u64)> {
-        let live: std::collections::HashSet<&str> =
-            manifests.iter().flat_map(|m| m.entries.values().map(|e| e.hash.as_str())).collect();
+        let live: std::collections::HashSet<&str> = manifests
+            .iter()
+            .flat_map(|m| m.entries.values().flat_map(|e| std::iter::once(e.hash.as_str()).chain(e.chunks.iter().map(|c| c.as_str()))))
+            .collect();
         let (mut n, mut bytes) = (0, 0);
         let root = self.root.join("objects");
         if !root.is_dir() {
@@ -197,5 +231,93 @@ impl Store {
             }
         }
         Ok((n, bytes))
+    }
+}
+
+/// Computes the content hash without storing anything (dry runs, change detection).
+pub struct HashWriter {
+    hasher: blake3::Hasher,
+    pub size: u64,
+}
+
+impl HashWriter {
+    pub fn new(store: &Store) -> Self {
+        HashWriter { hasher: store.keys.hasher(), size: 0 }
+    }
+    pub fn finish(self) -> (String, u64) {
+        (self.hasher.finalize().to_hex().to_string(), self.size)
+    }
+}
+
+impl Write for HashWriter {
+    fn write(&mut self, b: &[u8]) -> io::Result<usize> {
+        self.hasher.update(b);
+        self.size += b.len() as u64;
+        Ok(b.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Splits a byte stream into encrypted chunk objects. Chunks the vault already has are not re-uploaded.
+pub struct ChunkWriter<'a> {
+    store: &'a Store,
+    buf: Vec<u8>,
+    hasher: blake3::Hasher,
+    chunks: Vec<String>,
+    size: u64,
+    new_bytes: u64,
+}
+
+pub struct Stored {
+    pub hash: String,
+    pub chunks: Vec<String>,
+    pub size: u64,
+    /// Plaintext bytes of chunks that were new to the vault.
+    pub new_bytes: u64,
+}
+
+impl<'a> ChunkWriter<'a> {
+    pub fn new(store: &'a Store) -> Self {
+        ChunkWriter { store, buf: Vec::with_capacity(CHUNK), hasher: store.keys.hasher(), chunks: vec![], size: 0, new_bytes: 0 }
+    }
+
+    fn flush_chunk(&mut self, n: usize) -> io::Result<()> {
+        let chunk: Vec<u8> = self.buf.drain(..n).collect();
+        let id = self.store.keys.object_id(&chunk);
+        if !self.store.has_object(&id) {
+            self.store.put(&chunk).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            self.new_bytes += n as u64;
+        }
+        self.chunks.push(id);
+        Ok(())
+    }
+
+    pub fn finish(mut self) -> Result<Stored> {
+        if !self.buf.is_empty() || self.chunks.is_empty() {
+            let n = self.buf.len();
+            self.flush_chunk(n)?;
+        }
+        let hash = self.hasher.finalize().to_hex().to_string();
+        if self.chunks.len() == 1 {
+            self.chunks.clear(); // the single chunk's id equals the whole-file hash
+        }
+        Ok(Stored { hash, chunks: self.chunks, size: self.size, new_bytes: self.new_bytes })
+    }
+}
+
+impl Write for ChunkWriter<'_> {
+    fn write(&mut self, b: &[u8]) -> io::Result<usize> {
+        self.hasher.update(b);
+        self.size += b.len() as u64;
+        self.buf.extend_from_slice(b);
+        while self.buf.len() >= CHUNK {
+            self.flush_chunk(CHUNK)?;
+        }
+        Ok(b.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
     }
 }
