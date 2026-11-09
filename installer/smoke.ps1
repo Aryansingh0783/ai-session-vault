@@ -13,8 +13,9 @@ $deadline = (Get-Date).AddSeconds(60)
 $url = $null
 while ((Get-Date) -lt $deadline -and -not $url) {
     Start-Sleep -Seconds 1
-    $w = Get-CimInstance Win32_Process -Filter "Name='avault-window.exe'" | Where-Object { $_.CommandLine -match 'setup\.html\?t=' } | Select-Object -First 1
-    if ($w) { $url = ($w.CommandLine -split '\s+' | Where-Object { $_ -like 'http*' } | Select-Object -First 1) }
+    # The native window carries the link on its command line; if the system webview can't start, the browser does.
+    $w = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'setup\.html\?t=' } | Select-Object -First 1
+    if ($w) { $url = [regex]::Match($w.CommandLine, 'http://127\.0\.0\.1:\d+/setup\.html\?t=[0-9a-f]+').Value }
 }
 if (-not $url) {
     Get-Process avault* -ErrorAction SilentlyContinue | Format-Table Name, Id

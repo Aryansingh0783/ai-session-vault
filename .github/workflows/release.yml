@@ -79,11 +79,19 @@ jobs:
             avault-*.zip
             avault-*.tar.gz
             dist-installer/*.exe
-      - uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+
+  # Publish only when every platform built and the Windows installer passed its smoke test.
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          files: |
-            avault-*.zip
-            avault-*.tar.gz
-            dist-installer/*.exe
+          path: assets
+          merge-multiple: true
+      - run: ls -R assets
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: assets/**
           generate_release_notes: true
