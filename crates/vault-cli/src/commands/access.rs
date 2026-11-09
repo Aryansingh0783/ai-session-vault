@@ -26,15 +26,7 @@ pub(crate) fn join(cx: &Ctx, code: &str) -> Result<()> {
     if !Store::exists(&dir) {
         bail!("no vault in {} - let the folder finish syncing first", dir.display());
     }
-    let name = gethostname_string();
-    let (store, cred) = Store::join(&dir, code, &name)?;
-    let id = store.header.vault_id.clone();
-    let stored_in_keyring = keyring::Entry::new("ai-session-vault-device", &id).and_then(|e| e.set_password(&cred)).is_ok();
-    if !stored_in_keyring {
-        std::fs::create_dir_all(&env.state_dir)?;
-        std::fs::write(device_credential_path(env, &id), &cred)?;
-    }
-    save_vault(env, &dir)?;
+    let (_, stored_in_keyring) = join_with_code(env, &dir, code)?;
     println!(
         "Joined. This device can now open the vault without the passphrase{}.",
         if stored_in_keyring { " (credential in the OS credential store)" } else { " (credential in ~/.ai-vault; protect that folder)" }

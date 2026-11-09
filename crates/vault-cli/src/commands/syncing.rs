@@ -18,7 +18,7 @@ pub(crate) fn run_sync(cx: &Ctx, a: &SyncArgs) -> Result<()> {
     let opts = options(a)?;
     let mut state = State::load(env);
     let _lock = sync::lock(env)?;
-    let rep = match &cli.cmd {
+    let rep = match cli.cmd.as_ref().expect("a sync command") {
         Cmd::Sync(_) => {
             let r = sync::restore(env, &store, &mut state, &opts, &log)?;
             let mut r = r;

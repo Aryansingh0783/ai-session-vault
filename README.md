@@ -35,31 +35,23 @@ Same dashboard in the other themes:
 
 ## Install
 
-Download the zip/tarball for your system from the [Releases page](https://github.com/Aryansingh0783/ai-session-vault/releases), unpack it anywhere and run `avault` from a terminal (`avault-window` and `WebView2Loader.dll`, where present, must stay next to it for `avault app`). Or build it yourself: `cargo build --release`.
+**Windows:** download `AI-Session-Vault-Setup-<version>.exe` from the [Releases page](https://github.com/Aryansingh0783/ai-session-vault/releases) and run it. It installs for your user only (no administrator prompt), adds a Start Menu entry, and can start the app when you sign in. The installer is not code-signed yet, so Windows SmartScreen may say "unknown publisher": choose *More info*, then *Run anyway*.
+
+Open **AI Session Vault** from the Start Menu. The first time, the app asks whether this is your first computer (create a vault) or you already have one (connect to it). No terminal is needed.
+
+There is also a portable zip (`avault.exe` and `avault-window.exe`) and tarballs for macOS and Linux; those are command-line first: unpack, then run `avault app` (or `avault` on its own, which opens the app) from a terminal. Or build it yourself: `cargo build --release`.
 
 ## Quick start
 
+In the app: **first computer** > create a vault in a cloud-synced folder, choose a passphrase, save the recovery key. **Every other computer** > "I already have a vault", pick the same folder, enter the passphrase (or a one-time code from Devices > Add a device).
+
+The same from a terminal:
+
 ```
-avault app                                     # the app in its own window, with a tray icon
-avault ui                                      # open the app (Dashboard, Projects, Devices, Archive, Health, Settings)
-avault init --vault "D:\OneDrive\AI Vault"     # once; prints a recovery key - keep it
-avault sync                                    # on every device: pulls others' changes, then publishes yours
-avault doctor                                  # checks for the common gotchas
-avault sync --redact                           # strip API keys/tokens from logs before they leave this device
-avault sync --block-secrets                    # or refuse to upload logs that contain them
-avault verify --deep                           # integrity check of every vault file
-avault exclude "~/.claude-mem/observer-sessions"  # never upload a noisy project (plugin-generated sessions)
-avault enroll                                  # one-time code so another device can join without the passphrase
-avault join --vault "<folder>" --code <code>   # on the new device
-avault remember                                # keep the passphrase in the OS credential store (daemon runs unattended)
-avault overview --json                         # devices / projects / totals as JSON for a UI
-avault devices                                 # who uses this vault (--remove <id> to forget one)
-avault autostart enable                        # start the engine at login (scheduled task / launchd / systemd; --print previews)
-avault daemon                                  # always-on engine: file watching, syncs only what changed
-avault import-v1 "<old python vault>\data"     # bring over a vault made by the Python version
-avault import export.zip                       # claude.ai / ChatGPT data exports -> searchable archive
-avault search "rust lifetimes"                 # across archive + Claude Code sessions
-avault context "rust lifetimes" --pick 1       # paste-ready context pack for a new chat
+avault                                         # open the app (window + tray icon); first run shows the setup screen
+avault init --vault "D:\OneDrive\AI Vault"     # create a vault from the terminal; prints a recovery key - keep it
+avault sync                                    # pulls others' changes, then publishes yours
+avault ui                                      # the same app in your browser
 ```
 
 ## What changed from the Python version
@@ -84,7 +76,7 @@ avault context "rust lifetimes" --pick 1       # paste-ready context pack for a 
 ## The app (`avault ui`)
 A local web app in the iDraft design language (glass shell, white sidebar, dark cards, pill buttons; loaders from the loader sheet), served by the Rust core on `127.0.0.1` with a per-run access token and Host/Origin checks. It shows the vault overview, a 7-day sync activity chart, storage savings, health checks, live engine status (progress over server-sent events), projects, devices (add a device with a one-time code, revoke access), a search/reader for every session with "copy as context pack", integrity checks, and settings (project exclusions). Five themes (match system, light, dark, sand, ocean) are in Settings > Appearance. `avault ui --read-only` shows the vault without running the sync engine.
 
-**Native window + tray (`avault app`).** Starts the engine and UI, then opens them in the system webview (WebView2 on Windows) through the small `avault-window` program that ships next to `avault` (on Windows it also needs `WebView2Loader.dll` beside it; the build copies it). Closing the window hides it to the tray and syncing continues; the tray menu has Open, Sync now, Pause, Resume and Quit. If `avault-window` is missing, `avault app` falls back to the browser window.
+**Native window + tray (`avault app`, or just open the installed app).** `avault-window` is the program you launch: it starts the engine and the local UI in the background, then shows them in the system webview (WebView2 on Windows). Closing the window hides it to the tray and syncing continues; the tray menu has Open, Sync now, Pause, Resume and Quit. Opening the app a second time just brings the running window to the front. If the webview can't start, the app opens in your browser instead.
 
 ## How the vault works
 

@@ -1,44 +1,12 @@
 //! Shared helpers: saved settings, credentials, prompts, and output.
 
-use crate::cli::{Cli, SyncArgs};
-use anyhow::{anyhow, bail, Result};
+use crate::cli::SyncArgs;
+pub(crate) use crate::opening::*;
+use anyhow::{bail, Result};
 use std::io::{IsTerminal, Write};
-use std::path::{Path, PathBuf};
 use vault_core::crypto::MIN_PASSPHRASE;
-use vault_core::env::Env;
 use vault_core::paths::parse_maps;
-use vault_core::store::Store;
 use vault_core::sync::{Component, Options, Report};
-
-pub(crate) fn config_path(env: &Env) -> PathBuf {
-    env.state_dir.join("config.json")
-}
-
-pub(crate) fn saved_vault(env: &Env) -> Option<PathBuf> {
-    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(config_path(env)).ok()?).ok()?;
-    v.get("vault")?.as_str().map(PathBuf::from)
-}
-
-pub(crate) fn save_vault(env: &Env, p: &Path) -> Result<()> {
-    vault_core::env::set_config(&env.state_dir, "vault", serde_json::json!(p))
-}
-
-pub(crate) fn keyring_entry(vault_id: &str) -> Option<keyring::Entry> {
-    keyring::Entry::new("ai-session-vault", vault_id).ok()
-}
-
-pub(crate) fn device_credential_path(env: &Env, vault_id: &str) -> PathBuf {
-    env.state_dir.join(format!("device-{vault_id}.key"))
-}
-
-pub(crate) fn load_device_credential(env: &Env, vault_id: &str) -> Option<String> {
-    if let Ok(e) = keyring::Entry::new("ai-session-vault-device", vault_id) {
-        if let Ok(p) = e.get_password() {
-            return Some(p);
-        }
-    }
-    std::fs::read_to_string(device_credential_path(env, vault_id)).ok().map(|s| s.trim().to_string())
-}
 
 pub(crate) fn prompt_secret(label: &str) -> Result<String> {
     if let Ok(p) = std::env::var("AI_VAULT_PASSPHRASE") {
@@ -50,43 +18,6 @@ pub(crate) fn prompt_secret(label: &str) -> Result<String> {
         bail!("no terminal to ask for the passphrase: set AI_VAULT_PASSPHRASE or run in a terminal");
     }
     Ok(rpassword::prompt_password(label)?)
-}
-
-pub(crate) fn vault_dir(cli: &Cli, env: &Env) -> Result<PathBuf> {
-    cli.vault
-        .clone()
-        .or_else(|| saved_vault(env))
-        .ok_or_else(|| anyhow!("no vault yet: run `avault init --vault <folder>` (a folder inside OneDrive/Google Drive/Dropbox, or on a USB stick)"))
-}
-
-pub(crate) fn open(cli: &Cli, env: &Env) -> Result<Store> {
-    let dir = vault_dir(cli, env)?;
-    if !Store::exists(&dir) {
-        bail!("no vault in {} - if it is still syncing, wait for it to finish; otherwise run `avault init`", dir.display());
-    }
-    let vault_id = Store::read_header(&dir)?.vault_id;
-    let env_pw_set = std::env::var("AI_VAULT_PASSPHRASE").is_ok_and(|p| !p.is_empty());
-    let from_keyring = if env_pw_set { None } else { keyring_entry(&vault_id).and_then(|e| e.get_password().ok()) };
-    if !env_pw_set && from_keyring.is_none() {
-        if let Some(cred) = load_device_credential(env, &vault_id) {
-            match Store::open_with_device(&dir, &cred) {
-                Ok(s) => {
-                    save_vault(env, &dir)?;
-                    return Ok(s);
-                }
-                Err(e) => eprintln!("(this device's stored access no longer works: {e}; ask for the passphrase)"),
-            }
-        }
-    }
-    let store = match from_keyring {
-        Some(pw) if !pw.is_empty() => Store::open(&dir, &pw).or_else(|_| {
-            eprintln!("(the stored passphrase no longer works; ask for it again)");
-            Store::open(&dir, &prompt_secret("Vault passphrase (or recovery key): ")?)
-        })?,
-        _ => Store::open(&dir, &prompt_secret("Vault passphrase (or recovery key): ")?)?,
-    };
-    save_vault(env, &dir)?;
-    Ok(store)
 }
 
 pub(crate) fn options(a: &SyncArgs) -> Result<Options> {

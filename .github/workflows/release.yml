@@ -4,6 +4,8 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Run by hand to build and test everything without publishing a release.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -52,9 +54,36 @@ jobs:
           else
             tar -czf "avault-${{ github.ref_name }}-${{ matrix.name }}.tar.gz" -C dist .
           fi
+      - name: Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $v = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" "/DAppVersion=$v" "/DSourceDir=$PWD/target/release" installer/avault.iss
+          if ($LASTEXITCODE -ne 0) { throw 'the installer did not build' }
+          Get-ChildItem dist-installer
+      - name: Smoke test the installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist-installer/AI-Session-Vault-Setup-*.exe | Select-Object -First 1
+          $dir = Join-Path $env:RUNNER_TEMP 'avault-install'
+          Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOICONS', "/DIR=$dir", '/LOG=install.log' -Wait
+          if (-not (Test-Path "$dir/avault-window.exe")) { Get-Content install.log -ErrorAction SilentlyContinue; throw 'the installer did not install the app' }
+          ./installer/smoke.ps1 -Dir $dir
+      - uses: actions/upload-artifact@v4
+        with:
+          name: avault-${{ matrix.name }}
+          path: |
+            avault-*.zip
+            avault-*.tar.gz
+            dist-installer/*.exe
       - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
             avault-*.zip
             avault-*.tar.gz
+            dist-installer/*.exe
           generate_release_notes: true

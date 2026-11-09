@@ -15,11 +15,12 @@ pub(crate) struct Cli {
     /// Machine-readable output (for the desktop app and scripts).
     #[arg(long, global = true)]
     pub(crate) json: bool,
+    /// With no command, AI Session Vault opens as an app (what a double-click does).
     #[command(subcommand)]
-    pub(crate) cmd: Cmd,
+    pub(crate) cmd: Option<Cmd>,
 }
 
-#[derive(clap::Args, Clone)]
+#[derive(clap::Args, Clone, Default)]
 pub(crate) struct SyncArgs {
     /// Comma list: claude-code,claude-desktop,codex,archive
     #[arg(long)]
@@ -138,6 +139,9 @@ pub(crate) enum Cmd {
     App {
         #[command(flatten)]
         args: SyncArgs,
+        /// Start in the tray without showing the window (used when starting at login).
+        #[arg(long)]
+        hidden: bool,
     },
     /// Open the app: a local web UI over the sync engine (read the link it prints; it carries a one-time token).
     Ui {

@@ -5,6 +5,7 @@
 mod api;
 mod http;
 mod requests;
+mod setup;
 mod state;
 
 use anyhow::{anyhow, Result};
@@ -15,6 +16,7 @@ use vault_core::engine::{Engine, EngineConfig, Handle};
 use vault_core::env::Env;
 use vault_core::store::Store;
 
+pub use setup::{Setup, SetupBackend, SetupStatus, Suggestion};
 pub use state::HistoryItem;
 use state::{App, Shared};
 

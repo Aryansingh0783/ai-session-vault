@@ -3,6 +3,7 @@
 mod access;
 mod app;
 mod chats;
+mod setup;
 mod syncing;
 mod vault;
 
@@ -17,7 +18,8 @@ pub(crate) struct Ctx<'a> {
 }
 
 pub(crate) fn dispatch(cx: &Ctx) -> Result<()> {
-    match &cx.cli.cmd {
+    let Some(cmd) = &cx.cli.cmd else { return app::launch(cx) };
+    match cmd {
         Cmd::Init => vault::init(cx),
         Cmd::Sync(a) | Cmd::Backup(a) | Cmd::Restore(a) => syncing::run_sync(cx, a),
         Cmd::Status => vault::status(cx),
@@ -30,7 +32,7 @@ pub(crate) fn dispatch(cx: &Ctx) -> Result<()> {
         Cmd::Recovery => vault::recovery(cx),
         Cmd::ImportV1 { data_dir } => chats::import_v1(cx, data_dir),
         Cmd::Ui { args, port, no_open, read_only } => app::open_ui(cx, args, port, no_open, read_only),
-        Cmd::App { args } => app::open_app(cx, args),
+        Cmd::App { args, hidden } => app::open_app(cx, args, *hidden),
         Cmd::Autostart { action, print } => syncing::autostart(cx, action, print),
         Cmd::Daemon { args, quiet, full_every, no_watch, log: log_file } => syncing::daemon(cx, args, quiet, full_every, no_watch, log_file),
         Cmd::Enroll { minutes } => access::enroll(cx, minutes),

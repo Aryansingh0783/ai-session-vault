@@ -5,6 +5,7 @@ use vault_core::env::Env;
 mod autostart;
 mod cli;
 mod commands;
+mod opening;
 mod support;
 
 fn main() {

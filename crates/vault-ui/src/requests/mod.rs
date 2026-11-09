@@ -5,6 +5,9 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::collections::HashMap;
 
+mod setup;
+pub use setup::*;
+
 pub const MAX_SEARCH_CHARS: usize = 256;
 pub const MAX_PATH_CHARS: usize = 1024;
 pub const MAX_ID_CHARS: usize = 256;

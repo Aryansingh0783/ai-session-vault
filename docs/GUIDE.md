@@ -19,19 +19,21 @@ folders of your AI tools and to the vault folder you choose.
 
 ## Quick start (5 minutes)
 
-1. **Pick a vault folder** inside a folder your file-sync tool already syncs, for example `D:\OneDrive\AI Vault`.
-2. **Create the vault** (once, on your first computer):
-   ```
-   avault init --vault "D:\OneDrive\AI Vault"
-   ```
-   Choose a passphrase of 12+ characters. It prints a **recovery key**. Write it down and keep it somewhere safe:
-   it is the only way back in if you forget the passphrase.
-3. **Open the app**: `avault app` (own window + tray icon) or `avault ui` (browser window).
-4. Press **Sync now**. The dashboard shows what was uploaded.
-5. **Add your other computer**: in the app go to Devices, then Add a device. It shows a one-time code. On the new
-   computer run `avault join --vault "<same folder>" --code <code>`. The passphrase never has to be typed or shared.
-6. For hands-off use run `avault remember` (stores the passphrase in the OS credential store), then
-   `avault autostart enable` to start the always-on engine when you log in.
+1. **Install** the Windows installer from the Releases page and open **AI Session Vault** from the Start Menu.
+   (Windows SmartScreen may warn about an unknown publisher because the installer is not code-signed yet:
+   *More info*, then *Run anyway*.)
+2. **First computer:** choose *This is my first computer*. Pick a folder inside a cloud-synced folder
+   (OneDrive, Dropbox, Google Drive; the app suggests them), choose a passphrase of 12+ characters, and
+   **save the recovery key** it shows. It is the only way back in if you forget the passphrase.
+3. The app opens. Press **Sync now**; the dashboard shows what was uploaded. From now on it syncs by itself
+   a few seconds after a session goes quiet, and keeps running in the tray when you close the window.
+4. **Another computer:** install the app there too, choose *I already have a vault*, pick the same (synced)
+   folder and enter the passphrase. Or on the first computer open Devices, Add a device, and type the one-time
+   code on the new one; the passphrase never has to be typed or shared.
+5. Tick *Start when I sign in* in the installer (or later: `avault autostart enable`) for hands-off use.
+
+Prefer a terminal? `avault init --vault "D:\OneDrive\AI Vault"` creates a vault, `avault join --vault "<folder>" --code <code>`
+joins one, `avault sync` syncs once, and `avault app` / `avault ui` open the app.
 
 ## How to read the app
 
@@ -81,11 +83,13 @@ A sync does **restore, then backup**: it first pulls what other computers publis
 
 | Symptom | What to do |
 |---|---|
-| "no vault yet" | Run `avault init --vault <folder>` (first computer) or `avault join` (another one). |
+| The app shows a setup screen | That is the first run (or the vault can't be opened yet). Create a vault, connect to one, or enter the passphrase. |
+| "no vault yet" (terminal) | Run `avault init --vault <folder>` (first computer) or `avault join` (another one), or just open the app. |
 | Wrong passphrase | Any command accepts the **recovery key** where it asks for the passphrase. Then run `avault passwd` to set a new passphrase. |
 | Sync says the vault isn't ready / waits | The cloud tool hasn't finished downloading the folder. The engine retries with backoff; check that the folder is set to "always keep on this device". |
 | A project shows as dim | Its folder isn't on this computer. Clone or copy it onto this computer, or add a `--map "OLD=NEW"`. |
-| Window doesn't open (`avault app`) | WebView2 runtime is missing, or `avault-window` / `WebView2Loader.dll` isn't next to `avault`. It falls back to a browser window. |
+| Nothing happens when I open the app | It may already be running in the tray (opening it again brings the window forward). If the system webview can't start (WebView2 runtime missing), the app opens in your browser instead; install the WebView2 runtime from Microsoft to get the native window. |
+| Uninstalling | Settings > Apps > AI Session Vault. It removes the program only; your vault folder and `~/.ai-vault` stay. |
 | Something looks wrong | `avault doctor`, then `avault verify --deep`. Add `--json` to any command for scripts. |
 | Lost a computer | Devices page, Revoke. (Full key rotation is on the roadmap; change the passphrase with `avault passwd` as well.) |
 
