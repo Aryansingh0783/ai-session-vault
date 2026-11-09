@@ -6,6 +6,9 @@ import { $, $$, esc } from "./util.js";
 const card = $("#card");
 const view = { status: null, folder: "", recovery: "" };
 
+// A message about the last attempt goes away as soon as the user changes something.
+card.addEventListener("input", () => { const el = $("#err"); if (el) el.hidden = true; });
+
 const logo = `<img class="setup__logo" src="assets/logo.png" alt="" width="52" height="52">`;
 const errorBox = () => `<div class="setup__error" id="err" role="alert" hidden></div>`;
 
