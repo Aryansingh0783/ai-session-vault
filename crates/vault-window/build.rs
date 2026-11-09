@@ -15,9 +15,9 @@ fn locked_version(lock: &Path) -> Option<String> {
 }
 
 fn find_in_registry(version: &str, arch: &str) -> Option<PathBuf> {
-    let cargo_home = std::env::var_os("CARGO_HOME").map(PathBuf::from).or_else(|| {
-        std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")).map(|h| PathBuf::from(h).join(".cargo"))
-    })?;
+    let cargo_home = std::env::var_os("CARGO_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")).map(|h| PathBuf::from(h).join(".cargo")))?;
     for e in std::fs::read_dir(cargo_home.join("registry").join("src")).ok()?.flatten() {
         let dll = e.path().join(format!("webview2-com-sys-{version}")).join(arch).join("WebView2Loader.dll");
         if dll.exists() {

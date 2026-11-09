@@ -10,8 +10,7 @@ pub fn norm(p: &str) -> String {
 
 pub fn is_win(p: &str) -> bool {
     let b = p.as_bytes();
-    (b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/'))
-        || p.starts_with("\\\\")
+    (b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/')) || p.starts_with("\\\\")
 }
 
 /// Remainder (posix style) if `p` is inside `prefix`, `Some("")` if equal, else `None`.
@@ -68,9 +67,7 @@ pub fn parse_maps(items: &[String]) -> anyhow::Result<Vec<PathMap>> {
     items
         .iter()
         .map(|m| {
-            let (o, n) = m
-                .split_once('=')
-                .ok_or_else(|| anyhow::anyhow!("--map must look like OLD=NEW, got: {m}"))?;
+            let (o, n) = m.split_once('=').ok_or_else(|| anyhow::anyhow!("--map must look like OLD=NEW, got: {m}"))?;
             Ok(PathMap { old: o.trim().into(), new: n.trim().into() })
         })
         .collect()

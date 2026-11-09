@@ -50,7 +50,12 @@ pub fn import_v1(store: &Store, v1_data: &Path) -> Result<ImportReport> {
             let (key, value) = match portable {
                 Some(p) => (crate::paths::project_key(&p), p),
                 None => {
-                    let enc = meta.as_ref().and_then(|v| v.get("encoded_name")).and_then(|p| p.as_str()).map(String::from).unwrap_or_else(|| pd.file_name().to_string_lossy().trim_start_matches("raw-").to_string());
+                    let enc = meta
+                        .as_ref()
+                        .and_then(|v| v.get("encoded_name"))
+                        .and_then(|p| p.as_str())
+                        .map(String::from)
+                        .unwrap_or_else(|| pd.file_name().to_string_lossy().trim_start_matches("raw-").to_string());
                     (format!("raw-{enc}"), format!("raw:{enc}"))
                 }
             };
@@ -74,7 +79,8 @@ pub fn import_v1(store: &Store, v1_data: &Path) -> Result<ImportReport> {
     for (vdir, logical_prefix, names) in plain {
         for n in names {
             let p = v1_data.join(vdir).join(n);
-            let files: Vec<_> = if p.is_file() { vec![p.clone()] } else { WalkDir::new(&p).into_iter().flatten().filter(|e| e.file_type().is_file()).map(|e| e.into_path()).collect() };
+            let files: Vec<_> =
+                if p.is_file() { vec![p.clone()] } else { WalkDir::new(&p).into_iter().flatten().filter(|e| e.file_type().is_file()).map(|e| e.into_path()).collect() };
             for f in files {
                 let rel = f.strip_prefix(v1_data.join(vdir))?.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect::<Vec<_>>().join("/");
                 add(&mut m, format!("{logical_prefix}/{rel}"), &f, &mut rep)?;

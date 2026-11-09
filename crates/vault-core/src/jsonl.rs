@@ -82,7 +82,13 @@ fn memfind(h: &[u8], n: &[u8]) -> bool {
 pub fn complete_lines(data: &[u8]) -> &[u8] {
     match data.iter().rposition(|b| *b == b'\n') {
         Some(i) => &data[..=i],
-        None => if data.is_empty() { data } else { &data[..0] },
+        None => {
+            if data.is_empty() {
+                data
+            } else {
+                &data[..0]
+            }
+        }
     }
 }
 

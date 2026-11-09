@@ -55,7 +55,6 @@ pub(crate) struct App {
     pub(crate) started: Instant,
 }
 
-
 impl App {
     pub(crate) fn broadcast(&self, line: String) {
         self.subscribers.lock().unwrap().retain(|s| s.send(line.clone()).is_ok());

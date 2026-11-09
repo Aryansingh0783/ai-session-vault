@@ -1,0 +1,138 @@
+/* ---------- task card ---------- */
+.ids-task {
+  width: 135px;
+  height: 141px;
+  background: var(--id-paper);
+  border-radius: 20px;
+  padding: 16px 16px 14px;
+  position: relative;
+  box-shadow: var(--id-shadow-card);
+  display: flex;
+  flex-direction: column;
+}
+.ids-task__top { display: flex; align-items: flex-start; justify-content: space-between; }
+.ids-task__icon { width: 17px; height: 17px; }
+.ids-task__dots { color: var(--p-1a1a1a); letter-spacing: 1px; font-size: 13px; line-height: 1; }
+.ids-task__title {
+  margin-top: 22px;
+  font-size: var(--id-fs-body);
+  font-weight: 500;
+  line-height: 1.32;
+  letter-spacing: -0.01em;
+  color: var(--p-151515);
+  max-width: 105px;
+}
+.ids-task__date { margin-top: auto; font-size: 7px; color: var(--p-9a9a9a); font-weight: 500; }
+.ids-task__bell {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 42px;
+  height: 40px;
+  border-radius: 14px 0 20px 0;
+  background: var(--p-262626);
+  color: var(--p-ffffff);
+  display: grid;
+  place-items: center;
+}
+.ids-task__bell .ids-icon { width: 15px; height: 15px; }
+.ids-task__bell--outline {
+  background: transparent;
+  color: var(--p-1b1b1b);
+  border: 1px solid var(--p-dcdcdc);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  right: 16px;
+  bottom: 14px;
+}
+.ids-task__bell--outline .ids-icon { width: 12px; height: 12px; }
+
+/* ---------- add task ---------- */
+.ids-addtask {
+  width: 134px;
+  height: 140px;
+  border: 1px dashed var(--id-dashed);
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--p-1b1b1b);
+  font-size: var(--id-fs-body);
+  font-weight: 500;
+  background: var(--pw-06);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.ids-addtask:hover { background: var(--pw-28); border-color: var(--p-5c5c5c); }
+.ids-addtask .ids-icon { width: 14px; height: 14px; stroke-width: 1.5; }
+
+/* ---------- project card ---------- */
+.ids-project {
+  background: var(--id-ink-card);
+  color: var(--p-ffffff);
+  border-radius: 18px;
+  padding: 21px 23px;
+  position: relative;
+  box-shadow: var(--id-shadow-dark);
+  overflow: hidden;
+}
+.ids-project__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.ids-project__title { font-size: 13.4px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.1; }
+.ids-project__ring { color: var(--p-ffffff); margin-top: 2px; }
+.ids-project__meta { display: flex; align-items: center; gap: 5px; font-size: 7.5px; color: var(--p-cfcfcf); margin-top: 9px; }
+.ids-project__meta .ids-dot { width: 4px; height: 4px; background: var(--p-ffffff); }
+.ids-project__desc { font-size: 7.5px; line-height: 1.35; color: var(--p-c7c7c7); margin-top: 10px; max-width: 190px; }
+.ids-project__desc b { font-weight: 600; color: var(--p-e9e9e9); }
+
+/* ---------- menu ---------- */
+.ids-menu {
+  width: 66px;
+  background: var(--p-262626);
+  color: var(--p-ffffff);
+  border-radius: 9px;
+  padding: 7px 0;
+  box-shadow: 0 12px 26px var(--pb-24);
+  font-size: 7.5px;
+  font-weight: 500;
+}
+.ids-menu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 8px 3px 10px;
+  line-height: 1.2;
+  width: 100%;
+  color: var(--p-ffffff);
+}
+.ids-menu__item:hover { background: var(--pw-08); }
+.ids-menu__item .ids-icon { width: 8px; height: 8px; opacity: 0.9; }
+
+/* ---------- segmented control / view toggle ---------- */
+.ids-segment { display: inline-flex; align-items: center; gap: 8px; }
+.ids-segment__btn {
+  width: 17px; height: 17px;
+  display: grid; place-items: center;
+  color: var(--p-1a1a1a);
+  border-radius: 4px;
+}
+.ids-segment__btn.is-active { background: var(--id-ink); color: var(--id-on-ink); }
+
+/* ---------- stat block ---------- */
+.ids-stat { display: flex; align-items: flex-start; gap: 8px; }
+.ids-stat__value { font-size: var(--id-fs-stat); font-weight: 600; line-height: 0.85; letter-spacing: -0.04em; }
+.ids-stat__label { font-size: 7.5px; line-height: 1.35; color: var(--id-on-dark-muted); padding-top: 4px; }
+
+/* ---------- misc ---------- */
+.ids-divider-v { width: 1px; align-self: stretch; background: var(--pw-14); }
+.ids-hr { height: 1px; background: var(--id-line); border: 0; margin: 0; }
+.ids-muted { color: var(--id-muted); }
+.ids-caps { font-size: var(--id-fs-micro); font-weight: 600; letter-spacing: var(--id-tracking-label); text-transform: uppercase; }
+.ids-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* focus */
+.ids :focus-visible { outline: 2px solid var(--id-ink); outline-offset: 2px; border-radius: 6px; }
+.ids-card--dark :focus-visible, .ids-project :focus-visible { outline-color: var(--p-ffffff); }

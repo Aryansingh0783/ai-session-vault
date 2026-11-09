@@ -17,13 +17,7 @@ pub enum Action {
 
 /// The exact command the OS will run at login.
 pub fn daemon_args(vault: &Path, log: &Path) -> Vec<String> {
-    vec![
-        "--vault".into(),
-        vault.display().to_string(),
-        "daemon".into(),
-        "--log".into(),
-        log.display().to_string(),
-    ]
+    vec!["--vault".into(), vault.display().to_string(), "daemon".into(), "--log".into(), log.display().to_string()]
 }
 
 fn quote(s: &str) -> String {
@@ -33,11 +27,7 @@ fn quote(s: &str) -> String {
 /// Windows scheduled-task action: a hidden PowerShell that runs the daemon.
 pub fn windows_task_command(exe: &Path, args: &[String]) -> String {
     let inner = args.iter().map(|a| format!("'{}'", a.replace('\'', "''"))).collect::<Vec<_>>().join(" ");
-    format!(
-        "powershell.exe -NoProfile -WindowStyle Hidden -Command \"& '{}' {}\"",
-        exe.display().to_string().replace('\'', "''"),
-        inner
-    )
+    format!("powershell.exe -NoProfile -WindowStyle Hidden -Command \"& '{}' {}\"", exe.display().to_string().replace('\'', "''"), inner)
 }
 
 pub fn launchd_plist(exe: &Path, args: &[String]) -> String {

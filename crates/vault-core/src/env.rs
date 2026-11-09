@@ -48,10 +48,8 @@ impl Env {
             .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
             .and_then(|v| v.get("local_keys")?.as_array().map(|a| a.iter().filter_map(|k| k.as_str().map(String::from)).collect()))
             .unwrap_or_else(|| DEFAULT_LOCAL_KEYS.iter().map(|k| k.to_string()).collect());
-        let exclude_projects = read_config(&state_dir)
-            .get("exclude_projects")
-            .and_then(|v| v.as_array().map(|a| a.iter().filter_map(|k| k.as_str().map(String::from)).collect()))
-            .unwrap_or_default();
+        let exclude_projects =
+            read_config(&state_dir).get("exclude_projects").and_then(|v| v.as_array().map(|a| a.iter().filter_map(|k| k.as_str().map(String::from)).collect())).unwrap_or_default();
         Ok(Env { state_dir, home, claude_dir, claude_json, codex_dir, desktop_cfg, local_keys, exclude_projects })
     }
 

@@ -5,9 +5,7 @@ use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
 
 pub fn now_iso() -> String {
-    OffsetDateTime::now_utc()
-        .format(&time::format_description::well_known::Rfc3339)
-        .unwrap_or_default()
+    OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339).unwrap_or_default()
 }
 
 pub fn now_ms() -> i64 {
@@ -17,10 +15,7 @@ pub fn now_ms() -> i64 {
 /// Stamp used for local safety-copy folders: `20261106-142501`.
 pub fn stamp() -> String {
     let d = OffsetDateTime::now_utc();
-    format!(
-        "{:04}{:02}{:02}-{:02}{:02}{:02}",
-        d.year(), d.month() as u8, d.day(), d.hour(), d.minute(), d.second()
-    )
+    format!("{:04}{:02}{:02}-{:02}{:02}{:02}", d.year(), d.month() as u8, d.day(), d.hour(), d.minute(), d.second())
 }
 
 /// Write via temp file + rename so readers (and cloud sync clients) never see a half-written file.
@@ -44,9 +39,5 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
 }
 
 pub fn mtime_ms(md: &fs::Metadata) -> i64 {
-    md.modified()
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
+    md.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64).unwrap_or(0)
 }

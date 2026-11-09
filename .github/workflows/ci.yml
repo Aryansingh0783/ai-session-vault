@@ -15,14 +15,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Front-end syntax
+        if: runner.os == 'Linux'
+        run: |
+          for f in $(find crates/vault-ui/web/js -name '*.js'); do node --check --input-type=module < "$f" || exit 1; done
       - name: Linux system libraries (keychain)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
       # The native window crate needs a webview toolkit on Linux; it is built on Windows and macOS only.
+      - name: Lint (Linux)
+        if: runner.os == 'Linux'
+        run: cargo clippy --workspace --exclude vault-window --all-targets -- -D warnings
       - name: Test (Linux)
         if: runner.os == 'Linux'
         run: cargo test --workspace --exclude vault-window
+      - name: Lint
+        if: runner.os == 'Windows'
+        run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test
         if: runner.os != 'Linux'
         shell: bash

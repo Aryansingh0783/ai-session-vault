@@ -1,0 +1,129 @@
+/* ---------- checkbox ---------- */
+.ids-check {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1px solid var(--p-cfcfcf);
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: var(--p-ffffff);
+  color: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.ids-check .ids-icon { width: 8px; height: 8px; stroke-width: 2.2; }
+.ids-check.is-checked {
+  background: var(--id-ink);
+  border-color: var(--id-ink);
+  color: var(--id-on-ink);
+}
+.ids-check-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: var(--id-fs-body);
+  font-weight: 500;
+  color: var(--id-ink);
+  line-height: 1.2;
+  cursor: pointer;
+  user-select: none;
+}
+.ids-check-row.is-done { color: var(--p-8d8d8d); }
+
+/* ---------- progress ring ---------- */
+.ids-ring {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+}
+.ids-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.ids-ring__track { fill: none; stroke: var(--pw-22); stroke-width: 2; }
+.ids-ring__value { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.ids-ring__text { font-size: 6px; font-weight: 600; letter-spacing: -0.02em; }
+
+/* ---------- badge / dot ---------- */
+.ids-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--id-ink);
+  display: inline-block;
+  flex: 0 0 auto;
+}
+.ids-dot--muted { background: var(--p-8a8a8a); }
+.ids-dot--faint { background: var(--p-bdbdbd); }
+.ids-dot--light { background: var(--p-ffffff); }
+
+.ids-legend { display: flex; align-items: center; gap: 6px; font-size: 8px; color: var(--id-ink); }
+.ids-legend .ids-dot { width: 5px; height: 5px; }
+
+/* ---------- pill / tag ---------- */
+.ids-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 18px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 500;
+  background: var(--pb-06);
+}
+
+/* ---------- chart ---------- */
+.ids-chart { position: relative; width: 100%; height: 100%; }
+.ids-chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.ids-chart__axis { fill: none; stroke: var(--p-1c1c1c); stroke-width: 1; }
+.ids-chart__study { fill: none; stroke: var(--p-b4b4b4); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.ids-chart__sport { fill: none; stroke: var(--p-171717); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ids-chart__grid { stroke: var(--p-ededed); stroke-width: 0.6; }
+.ids-chart__tooltip {
+  position: absolute;
+  background: var(--id-ink); color: var(--id-on-ink);
+  font-size: 8px;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 3px;
+  line-height: 1;
+  box-shadow: 0 3px 8px var(--pb-18);
+}
+.ids-chart__tooltip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 6px;
+  height: 6px;
+  background: var(--id-ink);
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 1px;
+}
+.ids-chart__days {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--p-1b1b1b);
+}
+.ids-chart__day { display: grid; place-items: center; width: 20px; height: 20px; }
+.ids-chart__day.is-active {
+  background: var(--id-ink); color: var(--id-on-ink);
+  border-radius: 50%;
+}
+
+/* ---------- gauge ---------- */
+.ids-gauge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 93px;
+  height: 93px;
+}
+.ids-gauge svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ids-gauge__ring { fill: none; stroke-linecap: round; }
+.ids-gauge__center { position: relative; text-align: center; }
+.ids-gauge__value { font-size: 18px; font-weight: 600; letter-spacing: -0.03em; line-height: 1; }
+.ids-gauge__label { font-size: 6px; color: var(--p-7a7a7a); line-height: 1.2; margin-top: 1px; }

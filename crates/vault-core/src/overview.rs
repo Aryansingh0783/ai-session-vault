@@ -126,12 +126,5 @@ pub fn overview(env: &Env, store: &Store, maps: &[PathMap]) -> Result<Overview> 
     totals.sessions = list.iter().map(|p| p.sessions).sum();
     totals.projects = list.len();
     totals.devices = devices.len();
-    Ok(Overview {
-        vault_path: store.root.display().to_string(),
-        vault_id: store.header.vault_id.clone(),
-        devices,
-        projects: list,
-        totals,
-        warnings,
-    })
+    Ok(Overview { vault_path: store.root.display().to_string(), vault_id: store.header.vault_id.clone(), devices, projects: list, totals, warnings })
 }

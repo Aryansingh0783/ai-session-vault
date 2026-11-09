@@ -1,0 +1,75 @@
+/* ==========================================================================
+   AI Session Vault - app layout, in the iDraft design language
+   (monochrome, glass shell, white sidebar, dark cards, pill buttons)
+   ========================================================================== */
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--p-b9b9b9) url("../assets/stage-bg.jpg") center / cover no-repeat fixed;
+  font-family: var(--id-font);
+  color: var(--id-ink);
+  font-size: 14px;
+  line-height: 1.35;
+  overflow: hidden;
+}
+.stage { position: fixed; inset: 0; z-index: 0; }
+button { cursor: pointer; }
+h1, h2, h3, p { margin: 0; }
+
+/* ---------------- shell ---------------- */
+.shell {
+  position: relative; z-index: 1;
+  margin: 20px; height: calc(100vh - 40px);
+  border: 1px solid var(--pw-45);
+  border-radius: var(--id-r-shell);
+  padding: 24px;
+  display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 26px;
+  box-shadow: 0 30px 80px var(--pb-10);
+}
+
+/* ---------------- sidebar ---------------- */
+.sidebar {
+  background: var(--id-paper); border-radius: 26px;
+  padding: 22px 16px 18px; display: flex; flex-direction: column; min-height: 0; overflow: auto;
+}
+.brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 22px; }
+.brand__mark { width: 30px; height: 30px; object-fit: contain; border-radius: 8px; }
+.brand__name { font-size: 22px; font-weight: 700; letter-spacing: -0.03em; }
+.side-nav { gap: 4px; }
+.ids-nav__item { height: 38px; gap: 12px; padding: 0 14px; font-size: 14px; }
+.ids-nav__item .ids-icon { width: 16px; height: 16px; }
+.side-label { margin: 26px 0 10px 14px; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--p-6d6d6d); }
+.side-list { display: flex; flex-direction: column; gap: 2px; }
+.side-list li { display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 14px; font-size: 13px; font-weight: 500; color: var(--p-3a3a3a); }
+.side-list .ids-icon { width: 15px; height: 15px; }
+.side-list li { white-space: nowrap; }
+.side-list li.is-off { color: var(--p-a5a5a5); }
+.side-list li small { margin-left: auto; font-size: 10px; color: var(--p-a5a5a5); }
+.side-device { display: flex; align-items: center; gap: 12px; padding: 4px 14px; }
+.side-device b { display: block; font-size: 13px; font-weight: 600; }
+.side-device small { display: block; font-size: 11px; color: var(--id-muted); margin-top: 2px; }
+.team-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--p-a9a9a9); flex: none; }
+.team-dot.is-live { background: var(--id-ink); box-shadow: 0 0 0 4px var(--pc-22-22-22-12); }
+.team-dot.is-busy { animation: pulse 1.2s ease-in-out infinite; background: var(--id-ink); }
+.side-settings { margin-top: auto; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 7px var(--pc-22-22-22-0); transform: scale(1.15); } }
+
+/* ---------------- main ---------------- */
+.main { min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 4px 4px 18px; }
+.greeting { font-size: 28px; line-height: 1.15; font-weight: 600; letter-spacing: -0.02em; }
+.subline { margin-top: 4px; font-size: 13px; color: var(--id-sub, var(--p-4a4a4a)); }
+.top-actions { display: flex; align-items: center; gap: 10px; }
+.top-actions .ids-btn { margin-right: 6px; }
+.ids-iconbtn { width: 42px; height: 42px; position: relative; }
+.ids-iconbtn .ids-icon { width: 18px; height: 18px; }
+.bell-dot { position: absolute; top: 9px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--id-ink); box-shadow: 0 0 0 2px var(--p-ffffff); }
+.avatar { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--id-ink-card); color: var(--p-ffffff); font-weight: 600; font-size: 17px; box-shadow: 0 0 0 3px var(--pw-85), 0 6px 14px var(--pb-14); }
+.ids-btn { height: 34px; font-size: 13px; }
+.ids-btn--lg { height: 40px; padding: 0 20px; font-size: 14px; }
+.ids-btn--sm { height: 28px; font-size: 12px; padding: 0 12px; }
+.ids-btn[disabled] { opacity: .45; cursor: default; }
+.ids-btn.is-busy { pointer-events: none; opacity: .8; }
+
+.page { flex: 1; min-height: 0; overflow: auto; padding: 4px 6px 20px 4px; outline: none; scrollbar-width: thin; scrollbar-color: var(--pb-25) transparent; }
+.page.is-entering > * { animation: rise .35s ease both; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }

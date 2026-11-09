@@ -73,7 +73,7 @@ pub fn run_opts(env: &Env, vault_configured: bool, deep: bool) -> Vec<Finding> {
     }
     let (files, hits) = if deep { scan_secrets(env) } else { (0, 0) };
     if deep {
-    out.push(if hits == 0 {
+        out.push(if hits == 0 {
         f(Level::Ok, "No secret-looking strings in session logs", "")
     } else {
         f(Level::Warn, "Secrets found in session logs", format!("{hits} secret-looking string(s) in {files} file(s) (API keys / tokens that appeared in tool output). The vault encrypts everything, but rotate keys you pasted into chats and avoid sharing exported transcripts."))
@@ -81,7 +81,11 @@ pub fn run_opts(env: &Env, vault_configured: bool, deep: bool) -> Vec<Finding> {
     }
     let run = running_tools();
     if !run.is_empty() {
-        out.push(f(Level::Info, "AI tools are running", format!("{} - normal. Close them first when restoring onto this device, so they can't overwrite restored files", run.join(", "))));
+        out.push(f(
+            Level::Info,
+            "AI tools are running",
+            format!("{} - normal. Close them first when restoring onto this device, so they can't overwrite restored files", run.join(", ")),
+        ));
     }
     if cfg!(windows) && env.desktop_cfg.to_string_lossy().contains("Packages") {
         out.push(f(Level::Info, "Claude Desktop (Microsoft Store build)", format!("using its virtualized config: {}", env.desktop_cfg.display())));

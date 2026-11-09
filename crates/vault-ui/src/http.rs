@@ -65,7 +65,6 @@ fn mime(path: &str) -> &'static str {
     }
 }
 
-
 pub(crate) struct Reply {
     pub(crate) status: u16,
     pub(crate) content_type: &'static str,
@@ -118,10 +117,8 @@ impl App {
                 let _ = rq.as_reader().take(1 << 20).read_to_string(&mut body);
             }
             let reply = self.api(&method, path, &q, &body);
-            let resp = Response::from_data(reply.body)
-                .with_status_code(reply.status)
-                .with_header(hdr("Content-Type", reply.content_type))
-                .with_header(hdr("Cache-Control", "no-store"));
+            let resp =
+                Response::from_data(reply.body).with_status_code(reply.status).with_header(hdr("Content-Type", reply.content_type)).with_header(hdr("Cache-Control", "no-store"));
             let _ = rq.respond(resp);
             return;
         }
@@ -133,7 +130,10 @@ impl App {
         match WEB.get_file(rel) {
             Some(f) => {
                 let mut r = Response::from_data(f.contents().to_vec()).with_header(hdr("Content-Type", mime(rel)));
-                r = r.with_header(hdr("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'"));
+                r = r.with_header(hdr(
+                    "Content-Security-Policy",
+                    "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'",
+                ));
                 r = r.with_header(hdr("X-Content-Type-Options", "nosniff")).with_header(hdr("Cache-Control", "no-cache"));
                 let _ = rq.respond(r);
             }

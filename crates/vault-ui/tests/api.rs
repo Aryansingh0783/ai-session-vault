@@ -52,7 +52,13 @@ fn serves_the_app_and_guards_the_api() {
     let r = raw(ui.port, &format!("GET /api/overview HTTP/1.1\r\nHost: evil.example\r\nX-Token: {}\r\nConnection: close\r\n\r\n", ui.token));
     assert!(r.starts_with("HTTP/1.1 403"), "{r}");
     // So is a cross-site POST.
-    let r = raw(ui.port, &format!("POST /api/sync HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nOrigin: http://evil.example\r\nX-Token: {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", ui.port, ui.token));
+    let r = raw(
+        ui.port,
+        &format!(
+            "POST /api/sync HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nOrigin: http://evil.example\r\nX-Token: {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            ui.port, ui.token
+        ),
+    );
     assert!(r.starts_with("HTTP/1.1 403"), "{r}");
     ui.shutdown();
 }
