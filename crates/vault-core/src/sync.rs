@@ -75,9 +75,15 @@ impl Component {
 }
 
 /// Optional callbacks for a UI or daemon: progress reporting and cooperative cancellation.
+/// Progress callback: (phase, done, total).
+pub type ProgressFn = Arc<dyn Fn(&str, usize, usize) + Send + Sync>;
+
+/// What a streamed upload produced: (content hash, chunk ids, size, mtime_ms).
+type Uploaded = (String, Vec<String>, u64, u64);
+
 #[derive(Clone, Default)]
 pub struct Hooks {
-    pub progress: Option<Arc<dyn Fn(&str, usize, usize) + Send + Sync>>,
+    pub progress: Option<ProgressFn>,
     pub cancel: Option<Arc<AtomicBool>>,
 }
 
@@ -721,7 +727,7 @@ pub fn backup(env: &Env, store: &Store, state: &mut State, opts: &Options, log: 
         }
         // Stream: read -> portable form -> 1 MiB chunks -> encrypt. Memory stays bounded; chunks the
         // vault already has (e.g. the unchanged head of a growing log) are not uploaded again.
-        let res: Result<Option<(String, Vec<String>, u64, u64)>> = (|| {
+        let res: Result<Option<Uploaded>> = (|| {
             if opts.dry_run {
                 let mut hw = HashWriter::new(store);
                 if !prepare_to(item, env, opts.redact, &mut hw)? {

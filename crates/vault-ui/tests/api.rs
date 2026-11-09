@@ -37,7 +37,7 @@ fn serves_the_app_and_guards_the_api() {
     // The page itself is public; it carries no data.
     let html = ureq::get(&format!("{base}/")).call().unwrap().into_string().unwrap();
     assert!(html.contains("<title>AI Session Vault</title>"));
-    assert!(ureq::get(&format!("{base}/js/app.js")).call().unwrap().into_string().unwrap().contains("avault_t"));
+    assert!(ureq::get(&format!("{base}/js/api.js")).call().unwrap().into_string().unwrap().contains("avault_t"));
 
     // The API needs the per-run token.
     match ureq::get(&format!("{base}/api/overview")).call() {
@@ -87,5 +87,39 @@ fn api_drives_the_engine_and_reports_state() {
     let v = post("/api/verify", serde_json::json!({"deep": true}));
     assert_eq!(v["report"]["missing"].as_array().unwrap().len(), 0);
     assert_eq!(post("/api/pause", serde_json::json!({}))["ok"], true);
+    ui.shutdown();
+}
+
+#[test]
+fn rejects_bad_input_with_clear_messages() {
+    let (ui, _h, _v) = start();
+    let base = format!("http://127.0.0.1:{}", ui.port);
+    let post = |path: &str, body: &str| match ureq::post(&format!("{base}{path}")).set("X-Token", &ui.token).set("Content-Type", "application/json").send_string(body) {
+        Ok(r) => (r.status(), r.into_string().unwrap()),
+        Err(ureq::Error::Status(code, r)) => (code, r.into_string().unwrap()),
+        Err(e) => panic!("{e}"),
+    };
+    let get = |path: &str| match ureq::get(&format!("{base}{path}")).set("X-Token", &ui.token).call() {
+        Ok(r) => (r.status(), r.into_string().unwrap()),
+        Err(ureq::Error::Status(code, r)) => (code, r.into_string().unwrap()),
+        Err(e) => panic!("{e}"),
+    };
+
+    let (code, body) = post("/api/enroll", "{not json");
+    assert_eq!(code, 400, "{body}");
+    assert!(body.contains("not valid JSON"), "{body}");
+    assert_eq!(post("/api/enroll", r#"{"minutes": 5000}"#).0, 400);
+    assert_eq!(post("/api/enroll", r#"{"minutes": 5, "surprise": true}"#).0, 400);
+    assert_eq!(post("/api/exclude", r#"{"path": "   "}"#).0, 400);
+    assert_eq!(post("/api/revoke", r#"{"id": "../../x"}"#).0, 400);
+    assert_eq!(post("/api/revoke", r#"{"id": "deadbeef"}"#).0, 404);
+    assert_eq!(post("/api/forget-device", r#"{"id": "deadbeef"}"#).0, 404);
+    assert_eq!(get("/api/conversation").0, 400);
+    assert_eq!(get(&format!("/api/search?q={}", "x".repeat(300))).0, 400);
+    assert_eq!(get("/api/nope").0, 404);
+    // A valid request still works.
+    let (code, body) = post("/api/enroll", r#"{"minutes": 5}"#);
+    assert_eq!(code, 200, "{body}");
+    assert!(body.contains("\"code\""));
     ui.shutdown();
 }

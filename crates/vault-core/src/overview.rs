@@ -122,7 +122,7 @@ pub fn overview(env: &Env, store: &Store, maps: &[PathMap]) -> Result<Overview> 
         p.sessions = distinct.get(&p.key).map_or(0, |s| s.len());
         p.devices = project_devices.remove(&p.key).map(|s| s.into_values().collect()).unwrap_or_default();
     }
-    list.sort_by(|a, b| b.last_activity_ms.cmp(&a.last_activity_ms));
+    list.sort_by_key(|p| std::cmp::Reverse(p.last_activity_ms));
     totals.sessions = list.iter().map(|p| p.sessions).sum();
     totals.projects = list.len();
     totals.devices = devices.len();

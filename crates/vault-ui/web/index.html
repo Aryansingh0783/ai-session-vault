@@ -164,11 +164,11 @@
     </a>
 
     <nav class="ids-nav side-nav" aria-label="Primary">
-      <a class="ids-nav__item" href="#/dashboard" data-route="dashboard"><svg class="ids-icon"><use href="#i-dashboard"/></svg><span>Dashboard</span></a>
-      <a class="ids-nav__item" href="#/projects" data-route="projects"><svg class="ids-icon"><use href="#i-docs"/></svg><span>Projects</span></a>
-      <a class="ids-nav__item" href="#/devices" data-route="devices"><svg class="ids-icon"><use href="#i-laptop"/></svg><span>Devices</span></a>
-      <a class="ids-nav__item" href="#/archive" data-route="archive"><svg class="ids-icon"><use href="#i-archive"/></svg><span>Archive</span></a>
-      <a class="ids-nav__item" href="#/health" data-route="health"><svg class="ids-icon"><use href="#i-shield"/></svg><span>Health</span></a>
+      <a class="ids-nav__item" href="#/dashboard" data-route="dashboard" aria-label="Dashboard"><svg class="ids-icon"><use href="#i-dashboard"/></svg><span>Dashboard</span></a>
+      <a class="ids-nav__item" href="#/projects" data-route="projects" aria-label="Projects"><svg class="ids-icon"><use href="#i-docs"/></svg><span>Projects</span></a>
+      <a class="ids-nav__item" href="#/devices" data-route="devices" aria-label="Devices"><svg class="ids-icon"><use href="#i-laptop"/></svg><span>Devices</span></a>
+      <a class="ids-nav__item" href="#/archive" data-route="archive" aria-label="Archive"><svg class="ids-icon"><use href="#i-archive"/></svg><span>Archive</span></a>
+      <a class="ids-nav__item" href="#/health" data-route="health" aria-label="Health"><svg class="ids-icon"><use href="#i-shield"/></svg><span>Health</span></a>
     </nav>
 
     <p class="side-label">Synced tools</p>
@@ -184,7 +184,7 @@
       <div><b id="side-device-name">&mdash;</b><small id="side-device-state">starting&hellip;</small></div>
     </div>
 
-    <a class="side-settings ids-nav__item" href="#/settings" data-route="settings"><svg class="ids-icon"><use href="#i-settings"/></svg><span>Settings</span></a>
+    <a class="side-settings ids-nav__item" href="#/settings" data-route="settings" aria-label="Settings"><svg class="ids-icon"><use href="#i-settings"/></svg><span>Settings</span></a>
   </aside>
 
   <section class="main">
@@ -206,6 +206,6 @@
 
 <div id="modal-root"></div>
 <div class="ids-toast" id="toast" role="status" aria-live="polite"></div>
-<script src="js/app.js"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

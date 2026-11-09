@@ -491,7 +491,7 @@ pub fn list_sources(env: &Env) -> Vec<SourceFile> {
             }
         }
     }
-    out.sort_by(|a, b| b.mtime_ms.cmp(&a.mtime_ms));
+    out.sort_by_key(|a| std::cmp::Reverse(a.mtime_ms));
     out
 }
 
