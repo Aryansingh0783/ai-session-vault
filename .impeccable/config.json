@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "crates/vault-ui/web/setup.html"
+        ],
+        "createdAt": "2026-11-09T14:28:34.286Z",
+        "reason": "Claude: the only animated element is a loading spinner shown while /api/setup is pending; it reflects real in-flight work, not decorative liveness"
+      }
+    ]
+  }
+}

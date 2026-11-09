@@ -68,7 +68,7 @@ fn setup_page_api_and_finish() {
     let (code, body) = get("/api/setup");
     assert_eq!(code, 200, "{body}");
     assert!(body.contains("test-pc") && body.contains("hello"));
-    assert!(get("/api/setup/inspect?folder=D%3A%5Chas").1.contains("true"));
+    assert!(get("/api/setup/inspect?folder=D%3A%2Fhas").1.contains("true"));
     assert_eq!(get("/api/setup/inspect").0, 400);
 
     // Bad input is refused with a clear message before the backend is touched.
